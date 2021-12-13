@@ -371,6 +371,13 @@ spdk_nvme_ctrlr_cmd_get_log_page(struct spdk_nvme_ctrlr *ctrlr, uint8_t log_page
 			memcpy(ptr, g_ana_descs[i], desc_size);
 			ptr += desc_size;
 		}
+	} else if (log_page == SPDK_NVME_INTEL_LOG_PAGE_DIRECTORY) {
+		struct spdk_nvme_intel_log_page_directory *log_page_directory = payload;
+		log_page_directory->read_latency_log_len = true;
+		log_page_directory->write_latency_log_len = true;
+		log_page_directory->temperature_statistics_log_len = true;
+		log_page_directory->smart_log_len = true;
+		log_page_directory->marketing_description_log_len =  true;
 	}
 
 	fake_cpl_sc(cb_fn, cb_arg);
@@ -391,6 +398,7 @@ int
 nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair, struct nvme_request *req)
 {
 	CU_ASSERT(req->cmd.opc == SPDK_NVME_OPC_ASYNC_EVENT_REQUEST);
+	STAILQ_INSERT_HEAD(&qpair->free_req, req, stailq);
 
 	/*
 	 * For the purposes of this unit test, we don't need to bother emulating request submission.
@@ -2284,6 +2292,8 @@ test_nvme_ctrlr_init_set_nvmf_ioccsz(void)
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_IDENTIFY_IOCS_SPECIFIC);
@@ -2304,6 +2314,8 @@ test_nvme_ctrlr_init_set_nvmf_ioccsz(void)
 	ctrlr.trid.trtype = SPDK_NVME_TRANSPORT_RDMA;
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
@@ -2328,6 +2340,8 @@ test_nvme_ctrlr_init_set_nvmf_ioccsz(void)
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_IDENTIFY_IOCS_SPECIFIC);
@@ -2351,6 +2365,8 @@ test_nvme_ctrlr_init_set_nvmf_ioccsz(void)
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_IDENTIFY_IOCS_SPECIFIC);
@@ -2373,6 +2389,8 @@ test_nvme_ctrlr_init_set_nvmf_ioccsz(void)
 	ctrlr.trid.trtype = SPDK_NVME_TRANSPORT_CUSTOM;
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
 	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
@@ -2400,11 +2418,13 @@ test_nvme_ctrlr_init_set_num_queues(void)
 	SPDK_CU_ASSERT_FATAL(nvme_ctrlr_construct(&ctrlr) == 0);
 
 	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY;
-	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0); /* -> SET_KEEP_ALIVE_TIMEOUT */
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT);
-	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0); /* -> SET_IDENTIFY_IOCS_SPECIFIC */
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_IDENTIFY_IOCS_SPECIFIC);
-	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0); /* -> SET_NUM_QUEUES */
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
 	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_NUM_QUEUES);
 
 	ctrlr.opts.num_io_queues = 64;
@@ -2788,7 +2808,7 @@ test_nvme_ctrlr_aer_callback(void)
 	ctrlr.vs.bits.ter = 0;
 	ctrlr.cdata.nn = 4096;
 
-	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY_ACTIVE_NS;
+	ctrlr.state = NVME_CTRLR_STATE_CONFIGURE_AER;
 	g_active_ns_list = active_ns_list;
 	g_active_ns_list_length = SPDK_COUNTOF(active_ns_list);
 	while (ctrlr.state != NVME_CTRLR_STATE_READY) {
@@ -2835,9 +2855,10 @@ test_nvme_ctrlr_ns_attr_changed(void)
 	ctrlr.cap.bits.css |= SPDK_NVME_CAP_CSS_IOCS;
 	ctrlr.cdata.nn = 4096;
 
-	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY_ACTIVE_NS;
+	ctrlr.state = NVME_CTRLR_STATE_CONFIGURE_AER;
 	g_active_ns_list = active_ns_list;
 	g_active_ns_list_length = SPDK_COUNTOF(active_ns_list);
+
 	while (ctrlr.state != NVME_CTRLR_STATE_READY) {
 		SPDK_CU_ASSERT_FATAL(nvme_ctrlr_process_init(&ctrlr) == 0);
 	}
@@ -2890,7 +2911,7 @@ test_nvme_ctrlr_identify_namespaces_iocs_specific_next(void)
 	ctrlr.opts.admin_timeout_ms = NVME_TIMEOUT_INFINITE;
 	rc = nvme_ctrlr_identify_namespaces_iocs_specific_next(&ctrlr, prev_nsid);
 	CU_ASSERT(rc == 0);
-	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_SUPPORTED_LOG_PAGES);
 	CU_ASSERT(ctrlr.state_timeout_tsc == NVME_TIMEOUT_INFINITE);
 
 	/* case 2: move on to the next active NS, and no namespace with (supported) iocs specific data found , expect: pass */
@@ -2902,7 +2923,7 @@ test_nvme_ctrlr_identify_namespaces_iocs_specific_next(void)
 	ns[1].id = 2;
 	rc = nvme_ctrlr_identify_namespaces_iocs_specific_next(&ctrlr, prev_nsid);
 	CU_ASSERT(rc == 0);
-	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_CONFIGURE_AER);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_SUPPORTED_LOG_PAGES);
 	CU_ASSERT(ctrlr.state_timeout_tsc == NVME_TIMEOUT_INFINITE);
 
 	/* case 3: ns.csi is SPDK_NVME_CSI_ZNS, do not loop, expect: pass */
@@ -2949,34 +2970,6 @@ test_nvme_ctrlr_set_supported_log_pages(void)
 {
 	int rc;
 	struct spdk_nvme_ctrlr ctrlr = {};
-	struct spdk_nvme_intel_log_page_directory *log_page_directory = NULL;
-
-	/* Intel device */
-	ctrlr.cdata.lpa.celp = true;
-	ctrlr.cdata.vid = SPDK_PCI_VID_INTEL;
-	ctrlr.quirks |= NVME_INTEL_QUIRK_READ_LATENCY;
-	ctrlr.quirks |= NVME_INTEL_QUIRK_WRITE_LATENCY;
-	log_page_directory = spdk_zmalloc(sizeof(struct spdk_nvme_intel_log_page_directory),
-					  64, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-	SPDK_CU_ASSERT_FATAL(log_page_directory != NULL);
-
-	log_page_directory->temperature_statistics_log_len = 1;
-	log_page_directory->smart_log_len = 1;
-	log_page_directory->marketing_description_log_len = 1;
-	MOCK_SET(spdk_zmalloc, log_page_directory);
-
-	rc = nvme_ctrlr_set_supported_log_pages(&ctrlr);
-	CU_ASSERT(rc == 0);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_ERROR] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_HEALTH_INFORMATION] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_FIRMWARE_SLOT] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_COMMAND_EFFECTS_LOG] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_READ_CMD_LATENCY] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_WRITE_CMD_LATENCY] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_TEMPERATURE] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_SMART] == true);
-	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_MARKETING_DESCRIPTION] == true);
-	MOCK_CLEAR(spdk_zmalloc);
 
 	/* ana supported */
 	memset(&ctrlr, 0, sizeof(ctrlr));
@@ -2995,6 +2988,36 @@ test_nvme_ctrlr_set_supported_log_pages(void)
 	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_ASYMMETRIC_NAMESPACE_ACCESS] == true);
 	free(ctrlr.ana_log_page);
 	free(ctrlr.copied_ana_desc);
+}
+
+static void
+test_nvme_ctrlr_set_intel_supported_log_pages(void)
+{
+	DECLARE_AND_CONSTRUCT_CTRLR();
+
+	SPDK_CU_ASSERT_FATAL(nvme_ctrlr_construct(&ctrlr) == 0);
+
+	ctrlr.opts.admin_timeout_ms = NVME_TIMEOUT_INFINITE;
+	ctrlr.cdata.vid = SPDK_PCI_VID_INTEL;
+	ctrlr.state = NVME_CTRLR_STATE_SET_SUPPORTED_LOG_PAGES;
+
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_SET_SUPPORTED_INTEL_LOG_PAGES);
+
+	set_status_code = SPDK_NVME_SC_SUCCESS;
+	CU_ASSERT(nvme_ctrlr_process_init(&ctrlr) == 0);
+	CU_ASSERT(ctrlr.state == NVME_CTRLR_STATE_WAIT_FOR_SUPPORTED_INTEL_LOG_PAGES);
+
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_ERROR] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_HEALTH_INFORMATION] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_LOG_FIRMWARE_SLOT] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_READ_CMD_LATENCY] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_WRITE_CMD_LATENCY] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_TEMPERATURE] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_LOG_SMART] == true);
+	CU_ASSERT(ctrlr.log_page_supported[SPDK_NVME_INTEL_MARKETING_DESCRIPTION] == true);
+
+	nvme_ctrlr_destruct(&ctrlr);
 }
 
 #define UT_ANA_DESC_SIZE	(sizeof(struct spdk_nvme_ana_group_descriptor) +	\
@@ -3108,7 +3131,7 @@ test_nvme_ctrlr_ana_resize(void)
 	ctrlr.cdata.cmic.ana_reporting = true;
 	ctrlr.cdata.nanagrpid = 1;
 
-	ctrlr.state = NVME_CTRLR_STATE_IDENTIFY_ACTIVE_NS;
+	ctrlr.state = NVME_CTRLR_STATE_CONFIGURE_AER;
 	/* Start with 2 active namespaces */
 	g_active_ns_list = active_ns_list;
 	g_active_ns_list_length = 2;
@@ -3224,6 +3247,7 @@ int main(int argc, char **argv)
 	CU_ADD_TEST(suite, test_nvme_ctrlr_ns_attr_changed);
 	CU_ADD_TEST(suite, test_nvme_ctrlr_identify_namespaces_iocs_specific_next);
 	CU_ADD_TEST(suite, test_nvme_ctrlr_set_supported_log_pages);
+	CU_ADD_TEST(suite, test_nvme_ctrlr_set_intel_supported_log_pages);
 	CU_ADD_TEST(suite, test_nvme_ctrlr_parse_ana_log_page);
 	CU_ADD_TEST(suite, test_nvme_ctrlr_ana_resize);
 	CU_ADD_TEST(suite, test_nvme_ctrlr_get_memory_domains);

@@ -168,7 +168,7 @@ invalid_blk_request(struct spdk_vhost_blk_task *task, uint8_t status)
 /*
  * Process task's descriptor chain and setup data related fields.
  * Return
- *   total size of suplied buffers
+ *   total size of supplied buffers
  *
  *   FIXME: Make this function return to rd_cnt and wr_cnt
  */
@@ -487,7 +487,7 @@ process_blk_request(struct spdk_vhost_blk_task *task,
 
 	type = req->type;
 #ifdef VIRTIO_BLK_T_BARRIER
-	/* Don't care about barier for now (as QEMU's virtio-blk do). */
+	/* Don't care about barrier for now (as QEMU's virtio-blk do). */
 	type &= ~VIRTIO_BLK_T_BARRIER;
 #endif
 
@@ -562,7 +562,7 @@ process_blk_request(struct spdk_vhost_blk_task *task,
 		}
 
 		/* Unmap this range, SPDK doesn't support it, kernel will enable this flag by default
-		 * without checking unmap feature is negociated or not, the flag isn't mandatory, so
+		 * without checking unmap feature is negotiated or not, the flag isn't mandatory, so
 		 * just print a warning.
 		 */
 		if (desc->flags & VIRTIO_BLK_WRITE_ZEROES_FLAG_UNMAP) {
@@ -785,19 +785,24 @@ static void
 submit_inflight_desc(struct spdk_vhost_blk_session *bvsession,
 		     struct spdk_vhost_virtqueue *vq)
 {
-	struct spdk_vhost_session *vsession = &bvsession->vsession;
-	spdk_vhost_resubmit_info *resubmit = vq->vring_inflight.resubmit_inflight;
+	struct spdk_vhost_session *vsession;
+	spdk_vhost_resubmit_info *resubmit;
 	spdk_vhost_resubmit_desc *resubmit_list;
 	uint16_t req_idx;
+	int i;
 
-	if (spdk_likely(resubmit == NULL || resubmit->resubmit_list == NULL)) {
+	resubmit = vq->vring_inflight.resubmit_inflight;
+	if (spdk_likely(resubmit == NULL || resubmit->resubmit_list == NULL ||
+			resubmit->resubmit_num == 0)) {
 		return;
 	}
 
 	resubmit_list = resubmit->resubmit_list;
-	while (resubmit->resubmit_num-- > 0) {
-		req_idx = resubmit_list[resubmit->resubmit_num].index;
-		SPDK_DEBUGLOG(vhost_blk, "====== Start processing request idx %"PRIu16"======\n",
+	vsession = &bvsession->vsession;
+
+	for (i = resubmit->resubmit_num - 1; i >= 0; --i) {
+		req_idx = resubmit_list[i].index;
+		SPDK_DEBUGLOG(vhost_blk, "====== Start processing resubmit request idx %"PRIu16"======\n",
 			      req_idx);
 
 		if (spdk_unlikely(req_idx >= vq->vring.size)) {
@@ -813,9 +818,7 @@ submit_inflight_desc(struct spdk_vhost_blk_session *bvsession,
 			process_blk_task(vq, req_idx);
 		}
 	}
-
-	free(resubmit_list);
-	resubmit->resubmit_list = NULL;
+	resubmit->resubmit_num = 0;
 }
 
 static void
@@ -1230,7 +1233,7 @@ alloc_task_pool(struct spdk_vhost_blk_session *bvsession)
 		task_cnt = vq->vring.size;
 		if (task_cnt > SPDK_VHOST_MAX_VQ_SIZE) {
 			/* sanity check */
-			SPDK_ERRLOG("%s: virtuque %"PRIu16" is too big. (size = %"PRIu32", max = %"PRIu32")\n",
+			SPDK_ERRLOG("%s: virtqueue %"PRIu16" is too big. (size = %"PRIu32", max = %"PRIu32")\n",
 				    vsession->name, i, task_cnt, SPDK_VHOST_MAX_VQ_SIZE);
 			free_task_pool(bvsession);
 			return -1;

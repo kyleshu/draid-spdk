@@ -442,9 +442,9 @@ def bdev_nvme_set_options(client, action_on_timeout=None, timeout_us=None, timeo
         keep_alive_timeout_ms: Keep alive timeout period in millisecond, default is 10s (optional)
         retry_count: The number of attempts per I/O when an I/O fails (deprecated) (optional)
         arbitration_burst: The value is expressed as a power of two (optional)
-        low_prioity_weight: The number of commands that may be executed from the low priority queue at one time (optional)
-        medium_prioity_weight: The number of commands that may be executed from the medium priority queue at one time (optional)
-        high_prioity_weight: The number of commands that may be executed from the high priority queue at one time (optional)
+        low_priority_weight: The number of commands that may be executed from the low priority queue at one time (optional)
+        medium_priority_weight: The number of commands that may be executed from the medium priority queue at one time (optional)
+        high_priority_weight: The number of commands that may be executed from the high priority queue at one time (optional)
         nvme_adminq_poll_period_us: How often the admin queue is polled for asynchronous events in microseconds (optional)
         nvme_ioq_poll_period_us: How often to poll I/O queues for completions in microseconds (optional)
         io_queue_requests: The number of requests allocated for each NVMe I/O queue. Default: 512 (optional)
@@ -523,7 +523,7 @@ def bdev_nvme_set_hotplug(client, enable, period_us=None):
 def bdev_nvme_attach_controller(client, name, trtype, traddr, adrfam=None, trsvcid=None,
                                 priority=None, subnqn=None, hostnqn=None, hostaddr=None,
                                 hostsvcid=None, prchk_reftag=None, prchk_guard=None,
-                                hdgst=None, ddgst=None, fabrics_timeout=None, multipath=None):
+                                hdgst=None, ddgst=None, fabrics_timeout=None, multipath=None, num_io_queues=None):
     """Construct block device for each NVMe namespace in the attached controller.
 
     Args:
@@ -543,6 +543,7 @@ def bdev_nvme_attach_controller(client, name, trtype, traddr, adrfam=None, trsvc
         ddgst: Enable TCP data digest (optional)
         fabrics_timeout: Fabrics connect timeout in us (optional)
         multipath: The behavior when multiple paths are created ("disable", "failover", or "multipath"; failover if not specified)
+        num_io_queues: The number of IO queues to request during initialization. (optional)
 
     Returns:
         Names of created block devices.
@@ -589,6 +590,9 @@ def bdev_nvme_attach_controller(client, name, trtype, traddr, adrfam=None, trsvc
 
     if multipath:
         params['multipath'] = multipath
+
+    if num_io_queues:
+        params['num_io_queues'] = num_io_queues
 
     return client.call('bdev_nvme_attach_controller', params)
 

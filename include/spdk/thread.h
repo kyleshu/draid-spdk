@@ -700,7 +700,7 @@ struct spdk_thread *spdk_io_channel_get_thread(struct spdk_io_channel *ch);
  *
  * \param io_device 'fn' will be called on each channel associated with this io_device.
  * \param fn Called on the appropriate thread for each channel associated with io_device.
- * \param ctx Context buffer registered to spdk_io_channel_iter that can be obatined
+ * \param ctx Context buffer registered to spdk_io_channel_iter that can be obtained
  * form the function spdk_io_channel_iter_get_ctx().
  * \param cpl Called on the thread that spdk_for_each_channel was initially called
  * from when 'fn' has been called on each channel.
@@ -748,7 +748,8 @@ void *spdk_io_channel_get_io_device(struct spdk_io_channel *ch);
  * Helper function to iterate all channels for spdk_for_each_channel().
  *
  * \param i I/O channel iterator.
- * \param status Status for the I/O channel iterator.
+ * \param status Status for the I/O channel iterator;
+ * for non 0 status remaining iterations are terminated.
  */
 void spdk_for_each_channel_continue(struct spdk_io_channel_iter *i, int status);
 

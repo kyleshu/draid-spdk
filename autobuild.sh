@@ -95,8 +95,6 @@ function build_native_dpdk() {
 	# net/i40e driver is not really needed by us, but it's built as a workaround
 	# for DPDK issue: https://bugs.dpdk.org/show_bug.cgi?id=576
 	DPDK_DRIVERS=("bus" "bus/pci" "bus/vdev" "mempool/ring" "net/i40e" "net/i40e/base")
-	# all possible DPDK drivers
-	DPDK_ALL_DRIVERS=($(find "$external_dpdk_base_dir/drivers" -mindepth 1 -type d | sed -n "s#^$external_dpdk_base_dir/drivers/##p"))
 
 	if [[ "$SPDK_TEST_CRYPTO" -eq 1 ]]; then
 		intel_ipsec_mb_ver=v0.54
@@ -150,38 +148,20 @@ function build_native_dpdk() {
 		export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$isal_dir/build/lib"
 	fi
 
-	# Use difference between DPDK_ALL_DRIVERS and DPDK_DRIVERS as a set of DPDK drivers we don't want or
-	# don't need to build.
-	DPDK_DISABLED_DRIVERS=($(sort <(printf "%s\n" "${DPDK_DRIVERS[@]}") <(printf "%s\n" "${DPDK_ALL_DRIVERS[@]}") | uniq -u))
-
 	cd $external_dpdk_base_dir
 	if [ "$(uname -s)" = "Linux" ]; then
-		# Fix for freeing device if not kernel driver configured.
-		# TODO: Remove once this is merged in upstream DPDK
-		if grep "20.08.0" $external_dpdk_base_dir/VERSION; then
-			wget https://github.com/spdk/dpdk/commit/64f1ced13f974e8b3d46b87c361a09eca68126f9.patch -O dpdk-pci.patch
-			wget https://github.com/spdk/dpdk/commit/c2c273d5c8fbf673623b427f8f4ab5af5ddf0e08.patch -O dpdk-qat.patch
-		elif grep "20.11\|21.02" $external_dpdk_base_dir/VERSION; then
-			wget https://github.com/karlatec/dpdk/commit/3219c0cfc38803aec10c809dde16e013b370bda9.patch -O dpdk-pci.patch
-			wget https://github.com/karlatec/dpdk/commit/adf8f7638de29bc4bf9ba3faf12bbdae73acda0c.patch -O dpdk-qat.patch
-		elif grep "21.05" $external_dpdk_base_dir/VERSION; then
-			wget https://github.com/karlatec/dpdk/commit/f95e331be3a1f856b816948990dd2afc67ea4020.patch -O dpdk-pci.patch
-			wget https://github.com/karlatec/dpdk/commit/6fd2fa906ffdcee04e6ce5da40e61cb841be9827.patch -O dpdk-qat.patch
-		else
-			wget https://github.com/karlatec/dpdk/commit/6fd2fa906ffdcee04e6ce5da40e61cb841be9827.patch -O dpdk-qat.patch
+		if [[ $dpdk_ver == 20.11* ]]; then
+			patch -p1 < "$rootdir/test/common/config/pkgdep/patches/dpdk/20.11/dpdk_pci.patch"
+			patch -p1 < "$rootdir/test/common/config/pkgdep/patches/dpdk/20.11/dpdk_qat.patch"
+		elif [[ $dpdk_ver == 21.08* ]]; then
+			patch -p1 < "$rootdir/test/common/config/pkgdep/patches/dpdk/21.08/dpdk_qat.patch"
 		fi
-		git config --local user.name "spdk"
-		git config --local user.email "nomail@all.com"
-		if [[ -f dpdk-pci.patch ]]; then
-			patch -p1 < dpdk-pci.patch
-		fi
-		patch -p1 < dpdk-qat.patch
 	fi
 
 	meson build-tmp --prefix="$external_dpdk_dir" --libdir lib \
 		-Denable_docs=false -Denable_kmods=false -Dtests=false \
 		-Dc_link_args="$dpdk_ldflags" -Dc_args="$dpdk_cflags" \
-		-Dmachine=native -Ddisable_drivers=$(printf "%s," "${DPDK_DISABLED_DRIVERS[@]}")
+		-Dmachine=native -Denable_drivers=$(printf "%s," "${DPDK_DRIVERS[@]}")
 	ninja -C "$external_dpdk_base_dir/build-tmp" $MAKEFLAGS
 	ninja -C "$external_dpdk_base_dir/build-tmp" $MAKEFLAGS install
 

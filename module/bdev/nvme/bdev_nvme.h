@@ -104,7 +104,6 @@ struct nvme_ctrlr {
 	int					ref;
 
 	uint32_t				resetting : 1;
-	uint32_t				failover_in_progress : 1;
 	uint32_t				destruct : 1;
 	uint32_t				ana_log_page_updating : 1;
 	/**
@@ -122,7 +121,6 @@ struct nvme_ctrlr {
 
 	bdev_nvme_reset_cb			reset_cb_fn;
 	void					*reset_cb_arg;
-	struct spdk_nvme_ctrlr_reset_ctx	*reset_ctx;
 	/* Poller used to check for reset/detach completion */
 	struct spdk_poller			*reset_detach_poller;
 	struct spdk_nvme_detach_ctx		*detach_ctx;

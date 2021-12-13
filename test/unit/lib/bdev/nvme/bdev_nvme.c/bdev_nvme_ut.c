@@ -264,10 +264,6 @@ struct spdk_nvme_probe_ctx {
 	struct spdk_nvme_ctrlr		*init_ctrlr;
 };
 
-struct spdk_nvme_ctrlr_reset_ctx {
-	struct spdk_nvme_ctrlr		*ctrlr;
-};
-
 uint32_t
 spdk_nvme_ctrlr_get_first_active_ns(struct spdk_nvme_ctrlr *ctrlr)
 {
@@ -375,7 +371,7 @@ spdk_nvme_transport_id_compare(const struct spdk_nvme_transport_id *trid1,
 
 static struct spdk_nvme_ctrlr *
 ut_attach_ctrlr(const struct spdk_nvme_transport_id *trid, uint32_t num_ns,
-		bool ana_reporting, bool multi_ctrlr)
+		bool ana_reporting, bool multipath)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	uint32_t i;
@@ -417,6 +413,7 @@ ut_attach_ctrlr(const struct spdk_nvme_transport_id *trid, uint32_t num_ns,
 			ctrlr->ns[i].is_active = true;
 			ctrlr->ns[i].ana_state = SPDK_NVME_ANA_OPTIMIZED_STATE;
 			ctrlr->nsdata[i].nsze = 1024;
+			ctrlr->nsdata[i].nmic.can_share = multipath;
 		}
 
 		ctrlr->cdata.nn = num_ns;
@@ -424,7 +421,7 @@ ut_attach_ctrlr(const struct spdk_nvme_transport_id *trid, uint32_t num_ns,
 	}
 
 	ctrlr->cdata.cntlid = ++g_ut_cntlid;
-	ctrlr->cdata.cmic.multi_ctrlr = multi_ctrlr;
+	ctrlr->cdata.cmic.multi_ctrlr = multipath;
 	ctrlr->cdata.cmic.ana_reporting = ana_reporting;
 	ctrlr->trid = *trid;
 	TAILQ_INIT(&ctrlr->active_io_qpairs);
@@ -729,12 +726,8 @@ spdk_nvme_ctrlr_free_io_qpair(struct spdk_nvme_qpair *qpair)
 }
 
 int
-spdk_nvme_ctrlr_reset_poll_async(struct spdk_nvme_ctrlr_reset_ctx *ctrlr_reset_ctx)
+spdk_nvme_ctrlr_reconnect_poll_async(struct spdk_nvme_ctrlr *ctrlr)
 {
-	struct spdk_nvme_ctrlr *ctrlr = ctrlr_reset_ctx->ctrlr;
-
-	free(ctrlr_reset_ctx);
-
 	if (ctrlr->fail_reset) {
 		ctrlr->is_failed = true;
 		return -EIO;
@@ -743,21 +736,15 @@ spdk_nvme_ctrlr_reset_poll_async(struct spdk_nvme_ctrlr_reset_ctx *ctrlr_reset_c
 	return 0;
 }
 
-int
-spdk_nvme_ctrlr_reset_async(struct spdk_nvme_ctrlr *ctrlr,
-			    struct spdk_nvme_ctrlr_reset_ctx **reset_ctx)
+void
+spdk_nvme_ctrlr_reconnect_async(struct spdk_nvme_ctrlr *ctrlr)
 {
-	struct spdk_nvme_ctrlr_reset_ctx *ctrlr_reset_ctx;
+}
 
-	ctrlr_reset_ctx = calloc(1, sizeof(*ctrlr_reset_ctx));
-	if (!ctrlr_reset_ctx) {
-		return -ENOMEM;
-	}
-
+int
+spdk_nvme_ctrlr_disconnect(struct spdk_nvme_ctrlr *ctrlr)
+{
 	ctrlr->is_failed = false;
-
-	ctrlr_reset_ctx->ctrlr = ctrlr;
-	*reset_ctx = ctrlr_reset_ctx;
 
 	return 0;
 }
@@ -1207,7 +1194,7 @@ test_create_ctrlr(void)
 
 	ut_init_trid(&trid);
 
-	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, 0, NULL);
+	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, NULL);
 	CU_ASSERT(rc == 0);
 
 	CU_ASSERT(nvme_ctrlr_get_by_name("nvme0") != NULL);
@@ -1240,7 +1227,7 @@ test_reset_ctrlr(void)
 
 	set_thread(0);
 
-	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, 0, NULL);
+	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, NULL);
 	CU_ASSERT(rc == 0);
 
 	nvme_ctrlr = nvme_ctrlr_get_by_name("nvme0");
@@ -1290,7 +1277,7 @@ test_reset_ctrlr(void)
 	CU_ASSERT(ctrlr_ch1->qpair != NULL);
 	CU_ASSERT(ctrlr_ch2->qpair != NULL);
 
-	poll_thread_times(0, 1);
+	poll_thread_times(0, 3);
 	CU_ASSERT(ctrlr_ch1->qpair == NULL);
 	CU_ASSERT(ctrlr_ch2->qpair != NULL);
 
@@ -1299,7 +1286,7 @@ test_reset_ctrlr(void)
 	CU_ASSERT(ctrlr_ch2->qpair == NULL);
 	CU_ASSERT(ctrlr.is_failed == true);
 
-	poll_thread_times(1, 1);
+	poll_thread_times(0, 1);
 	CU_ASSERT(ctrlr.is_failed == false);
 
 	poll_thread_times(0, 1);
@@ -1312,13 +1299,11 @@ test_reset_ctrlr(void)
 	CU_ASSERT(nvme_ctrlr->resetting == true);
 	CU_ASSERT(curr_trid->is_failed == true);
 
+	poll_thread_times(0, 2);
+	CU_ASSERT(nvme_ctrlr->resetting == true);
 	poll_thread_times(1, 1);
 	CU_ASSERT(nvme_ctrlr->resetting == true);
 	poll_thread_times(0, 1);
-	CU_ASSERT(nvme_ctrlr->resetting == true);
-	poll_thread_times(1, 1);
-	CU_ASSERT(nvme_ctrlr->resetting == true);
-	poll_thread_times(1, 1);
 	CU_ASSERT(nvme_ctrlr->resetting == false);
 	CU_ASSERT(curr_trid->is_failed == false);
 
@@ -1354,7 +1339,7 @@ test_race_between_reset_and_destruct_ctrlr(void)
 
 	set_thread(0);
 
-	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, 0, NULL);
+	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, NULL);
 	CU_ASSERT(rc == 0);
 
 	nvme_ctrlr = nvme_ctrlr_get_by_name("nvme0");
@@ -1433,7 +1418,7 @@ test_failover_ctrlr(void)
 
 	set_thread(0);
 
-	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid1, 0, NULL);
+	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid1, NULL);
 	CU_ASSERT(rc == 0);
 
 	nvme_ctrlr = nvme_ctrlr_get_by_name("nvme0");
@@ -1466,18 +1451,10 @@ test_failover_ctrlr(void)
 	nvme_ctrlr->resetting = true;
 
 	rc = bdev_nvme_failover(nvme_ctrlr, false);
-	CU_ASSERT(rc == 0);
+	CU_ASSERT(rc == -EBUSY);
 
-	/* Case 3: failover is in progress. */
-	nvme_ctrlr->failover_in_progress = true;
-
-	rc = bdev_nvme_failover(nvme_ctrlr, false);
-	CU_ASSERT(rc == 0);
-	CU_ASSERT(curr_trid->is_failed == false);
-
-	/* Case 4: reset completes successfully. */
+	/* Case 3: reset completes successfully. */
 	nvme_ctrlr->resetting = false;
-	nvme_ctrlr->failover_in_progress = false;
 
 	rc = bdev_nvme_failover(nvme_ctrlr, false);
 	CU_ASSERT(rc == 0);
@@ -1507,27 +1484,19 @@ test_failover_ctrlr(void)
 	/* Failover starts from thread 1. */
 	set_thread(1);
 
-	/* Case 5: reset is in progress. */
+	/* Case 4: reset is in progress. */
 	nvme_ctrlr->resetting = true;
 
 	rc = bdev_nvme_failover(nvme_ctrlr, false);
 	CU_ASSERT(rc == -EBUSY);
 
-	/* Case 5: failover is in progress. */
-	nvme_ctrlr->failover_in_progress = true;
-
-	rc = bdev_nvme_failover(nvme_ctrlr, false);
-	CU_ASSERT(rc == 0);
-
-	/* Case 6: failover completes successfully. */
+	/* Case 5: failover completes successfully. */
 	nvme_ctrlr->resetting = false;
-	nvme_ctrlr->failover_in_progress = false;
 
 	rc = bdev_nvme_failover(nvme_ctrlr, false);
 	CU_ASSERT(rc == 0);
 
 	CU_ASSERT(nvme_ctrlr->resetting == true);
-	CU_ASSERT(nvme_ctrlr->failover_in_progress == true);
 
 	next_trid = TAILQ_FIRST(&nvme_ctrlr->trids);
 	SPDK_CU_ASSERT_FATAL(next_trid != NULL);
@@ -1538,7 +1507,6 @@ test_failover_ctrlr(void)
 	poll_threads();
 
 	CU_ASSERT(nvme_ctrlr->resetting == false);
-	CU_ASSERT(nvme_ctrlr->failover_in_progress == false);
 
 	spdk_put_io_channel(ch2);
 
@@ -2516,7 +2484,7 @@ test_get_io_qpair(void)
 
 	set_thread(0);
 
-	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, 0, NULL);
+	rc = nvme_ctrlr_create(&ctrlr, "nvme0", &trid, NULL);
 	CU_ASSERT(rc == 0);
 
 	nvme_ctrlr = nvme_ctrlr_get_by_name("nvme0");
@@ -2829,13 +2797,13 @@ test_reconnect_qpair(void)
 	CU_ASSERT(ctrlr_ch2->qpair == NULL);
 	CU_ASSERT(nvme_ctrlr->resetting == true);
 
-	poll_thread_times(0, 1);
+	poll_thread_times(0, 2);
 	poll_thread_times(1, 1);
 	CU_ASSERT(ctrlr_ch1->qpair == NULL);
 	CU_ASSERT(ctrlr_ch2->qpair == NULL);
 	CU_ASSERT(ctrlr->is_failed == true);
 
-	poll_thread_times(1, 1);
+	poll_thread_times(0, 1);
 	CU_ASSERT(ctrlr->is_failed == false);
 
 	poll_thread_times(0, 1);
@@ -2844,10 +2812,9 @@ test_reconnect_qpair(void)
 	CU_ASSERT(ctrlr_ch2->qpair != NULL);
 	CU_ASSERT(nvme_ctrlr->resetting == true);
 
+	poll_thread_times(0, 2);
 	poll_thread_times(1, 1);
 	poll_thread_times(0, 1);
-	poll_thread_times(1, 1);
-	poll_thread_times(1, 1);
 	CU_ASSERT(nvme_ctrlr->resetting == false);
 
 	poll_threads();
@@ -2864,16 +2831,15 @@ test_reconnect_qpair(void)
 	CU_ASSERT(ctrlr_ch2->qpair == NULL);
 	CU_ASSERT(nvme_ctrlr->resetting == true);
 
-	poll_thread_times(0, 1);
+	poll_thread_times(0, 2);
 	poll_thread_times(1, 1);
 	CU_ASSERT(ctrlr_ch1->qpair == NULL);
 	CU_ASSERT(ctrlr_ch2->qpair == NULL);
 	CU_ASSERT(ctrlr->is_failed == true);
 
+	poll_thread_times(0, 2);
 	poll_thread_times(1, 1);
 	poll_thread_times(0, 1);
-	poll_thread_times(1, 1);
-	poll_thread_times(1, 1);
 	CU_ASSERT(ctrlr->is_failed == true);
 	CU_ASSERT(nvme_ctrlr->resetting == false);
 	CU_ASSERT(ctrlr_ch1->qpair == NULL);
@@ -3654,7 +3620,7 @@ test_reset_bdev_ctrlr(void)
 	CU_ASSERT(nvme_ctrlr1->resetting == true);
 	CU_ASSERT(nvme_ctrlr1->reset_cb_arg == first_bio);
 
-	poll_thread_times(0, 1);
+	poll_thread_times(0, 2);
 	CU_ASSERT(io_path11->ctrlr_ch->qpair == NULL);
 	CU_ASSERT(io_path21->ctrlr_ch->qpair != NULL);
 
@@ -3686,7 +3652,7 @@ test_reset_bdev_ctrlr(void)
 	CU_ASSERT(first_bio->io_path == io_path12);
 	CU_ASSERT(nvme_ctrlr2->resetting == true);
 
-	poll_thread_times(0, 1);
+	poll_thread_times(0, 2);
 	CU_ASSERT(io_path12->ctrlr_ch->qpair == NULL);
 	CU_ASSERT(io_path22->ctrlr_ch->qpair != NULL);
 
@@ -3816,7 +3782,7 @@ test_find_io_path(void)
 
 	nbdev_ch.current_io_path = NULL;
 
-	/* Test if io_path whose qpair is resetting is excluced. */
+	/* Test if io_path whose qpair is resetting is excluded. */
 
 	ctrlr_ch1.qpair = NULL;
 	CU_ASSERT(bdev_nvme_find_io_path(&nbdev_ch) == NULL);
@@ -3927,7 +3893,7 @@ test_retry_io_if_ctrlr_is_resetting(void)
 	ctrlr_ch->qpair->is_connected = false;
 	ctrlr->is_failed = true;
 
-	poll_thread_times(0, 3);
+	poll_thread_times(0, 4);
 
 	CU_ASSERT(ctrlr_ch->qpair == NULL);
 	CU_ASSERT(nvme_ctrlr->resetting == true);

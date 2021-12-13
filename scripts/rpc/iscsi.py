@@ -443,7 +443,7 @@ def iscsi_create_portal_group(client, portals, tag, private, wait):
         portals: List of portals, e.g. [{'host': ip, 'port': port}]
         tag: Initiator group tag (unique, integer > 0)
         private: Public (false) or private (true) portal group for login redirection.
-        wait: Do not listen on portals until it is allowed explictly.
+        wait: Do not listen on portals until it is allowed explicitly.
 
     Returns:
         True or False
@@ -476,7 +476,8 @@ def iscsi_create_initiator_group(client, tag, initiators, netmasks):
 
     Args:
         tag: Initiator group tag (unique, integer > 0)
-        initiators: List of initiator hostnames or IP addresses, e.g. ["127.0.0.1","192.168.200.100"]
+        initiators: List of initiator hostnames or IP addresses, e.g.
+        ["ANY"] or ["iqn.2016-06.io.spdk:host1","iqn.2016-06.io.spdk:host2"]
         netmasks: List of initiator netmasks, e.g. ["255.255.0.0","255.248.0.0"]
 
     Returns:
@@ -496,7 +497,8 @@ def iscsi_initiator_group_add_initiators(
 
     Args:
         tag: Initiator group tag (unique, integer > 0)
-        initiators: List of initiator hostnames or IP addresses, e.g. ["127.0.0.1","192.168.200.100"]
+        initiators: List of initiator hostnames or IP addresses, e.g.
+        ["ANY"] or ["iqn.2016-06.io.spdk:host1","iqn.2016-06.io.spdk:host2"]
         netmasks: List of initiator netmasks, e.g. ["255.255.0.0","255.248.0.0"]
 
     Returns:

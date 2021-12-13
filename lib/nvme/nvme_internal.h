@@ -235,7 +235,7 @@ struct nvme_payload {
 	spdk_nvme_req_next_sge_cb next_sge_fn;
 
 	/**
-	 * Exended IO options passed by the user
+	 * Extended IO options passed by the user
 	 */
 	struct spdk_nvme_ns_cmd_ext_io_opts *opts;
 	/**
@@ -654,6 +654,16 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_WAIT_FOR_IDENTIFY,
 
 	/**
+	 * Configure AER of the controller.
+	 */
+	NVME_CTRLR_STATE_CONFIGURE_AER,
+
+	/**
+	 * Waiting for the Configure AER to be completed.
+	 */
+	NVME_CTRLR_STATE_WAIT_FOR_CONFIGURE_AER,
+
+	/**
 	 * Set Keep Alive Timeout of the controller.
 	 */
 	NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT,
@@ -735,19 +745,19 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_WAIT_FOR_IDENTIFY_ID_DESCS,
 
 	/**
-	 * Configure AER of the controller.
-	 */
-	NVME_CTRLR_STATE_CONFIGURE_AER,
-
-	/**
-	 * Waiting for the Configure AER to be completed.
-	 */
-	NVME_CTRLR_STATE_WAIT_FOR_CONFIGURE_AER,
-
-	/**
 	 * Set supported log pages of the controller.
 	 */
 	NVME_CTRLR_STATE_SET_SUPPORTED_LOG_PAGES,
+
+	/**
+	 * Set supported log pages of INTEL controller.
+	 */
+	NVME_CTRLR_STATE_SET_SUPPORTED_INTEL_LOG_PAGES,
+
+	/**
+	 * Waiting for supported log pages of INTEL controller.
+	 */
+	NVME_CTRLR_STATE_WAIT_FOR_SUPPORTED_INTEL_LOG_PAGES,
 
 	/**
 	 * Set supported features of the controller.
@@ -780,7 +790,7 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_READY,
 
 	/**
-	 * Controller inilialization has an error.
+	 * Controller initialization has an error.
 	 */
 	NVME_CTRLR_STATE_ERROR
 };

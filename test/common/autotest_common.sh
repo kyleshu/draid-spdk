@@ -119,8 +119,6 @@ export SPDK_TEST_VHOST_INIT
 export SPDK_TEST_PMDK
 : ${SPDK_TEST_LVOL=0}
 export SPDK_TEST_LVOL
-: ${SPDK_TEST_JSON=0}
-export SPDK_TEST_JSON
 : ${SPDK_TEST_REDUCE=0}
 export SPDK_TEST_REDUCE
 : ${SPDK_RUN_ASAN=0}
@@ -1346,7 +1344,7 @@ function nvme_namespace_revert() {
 			# This assumes every NVMe controller contains single namespace,
 			# encompassing Total NVM Capacity and formatted as 512 block size.
 			# 512 block size is needed for test/vhost/vhost_boot.sh to
-			# succesfully run.
+			# successfully run.
 
 			unvmcap=$(nvme id-ctrl ${nvme_ctrlr} | grep unvmcap | cut -d: -f2)
 			if [[ "$unvmcap" -eq 0 ]]; then
@@ -1462,6 +1460,24 @@ function reap_spdk_processes() {
 	kill -SIGKILL "${!spdk_pids[@]}" 2> /dev/null || :
 
 	return 1
+}
+
+function is_block_zoned() {
+	local device=$1
+
+	[[ -e /sys/block/$device/queue/zoned ]] || return 1
+	[[ $(< "/sys/block/$device/queue/zoned") != none ]]
+}
+
+function get_zoned_devs() {
+	local -gA zoned_devs=()
+	local nvme bdf
+
+	for nvme in /sys/block/nvme*; do
+		if is_block_zoned "${nvme##*/}"; then
+			zoned_devs["${nvme##*/}"]=$(< "$nvme/device/address")
+		fi
+	done
 }
 
 # Define temp storage for all the tests. Look for 2GB at minimum

@@ -61,14 +61,10 @@ endif
 DPDK_INC := -I$(DPDK_INC_DIR)
 
 DPDK_LIB_LIST = rte_eal rte_mempool rte_ring rte_mbuf rte_bus_pci rte_pci rte_mempool_ring
+DPDK_LIB_LIST += rte_telemetry rte_kvargs
 
 ifeq ($(OS),Linux)
 DPDK_LIB_LIST += rte_power rte_ethdev rte_net
-endif
-
-# DPDK 20.05 eal dependency
-ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_telemetry.*))
-DPDK_LIB_LIST += rte_telemetry
 endif
 
 # There are some complex dependencies when using crypto, reduce or both so
@@ -77,7 +73,6 @@ endif
 DPDK_FRAMEWORK=n
 ifeq ($(CONFIG_CRYPTO),y)
 DPDK_FRAMEWORK=y
-DPDK_LIB_LIST += rte_reorder
 ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_crypto_ipsec_mb.*))
 # PMD name as of DPDK 21.11
 DPDK_LIB_LIST += rte_crypto_ipsec_mb
@@ -85,21 +80,13 @@ else
 ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_crypto_aesni_mb.*))
 # PMD name for DPDK 21.08 and earlier
 DPDK_LIB_LIST += rte_crypto_aesni_mb
-else
-# PMD name for DPDK 20.08 and earlier
-DPDK_LIB_LIST += rte_pmd_aesni_mb
 endif
 endif
 endif
 
 ifeq ($(CONFIG_REDUCE),y)
 DPDK_FRAMEWORK=y
-ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_compress_isal.*))
 DPDK_LIB_LIST += rte_compress_isal
-else
-# PMD name for DPDK 20.08 and earlier
-DPDK_LIB_LIST += rte_pmd_isal
-endif
 ifeq ($(CONFIG_REDUCE_MLX5),y)
 DPDK_LIB_LIST += rte_common_mlx5 rte_compress_mlx5
 # Introduced in DPDK 21.08
@@ -111,16 +98,7 @@ endif
 
 ifeq ($(DPDK_FRAMEWORK),y)
 DPDK_LIB_LIST += rte_cryptodev rte_compressdev rte_bus_vdev
-ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_common_qat.*))
 DPDK_LIB_LIST += rte_common_qat
-else
-# PMD name for DPDK 20.08 and earlier
-DPDK_LIB_LIST += rte_pmd_qat
-endif
-endif
-
-ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_kvargs.*))
-DPDK_LIB_LIST += rte_kvargs
 endif
 
 LINK_HASH=n
@@ -133,7 +111,7 @@ DPDK_LIB_LIST += rte_cryptodev
 endif
 endif
 
-ifeq ($(CONFIG_RAID5),y)
+ifeq ($(CONFIG_FC),y)
 LINK_HASH=y
 endif
 
@@ -144,8 +122,10 @@ DPDK_LIB_LIST += rte_rcu
 endif
 endif
 
-DPDK_SHARED_LIB = $(DPDK_LIB_LIST:%=$(DPDK_LIB_DIR)/lib%.so)
-DPDK_STATIC_LIB = $(DPDK_LIB_LIST:%=$(DPDK_LIB_DIR)/lib%.a)
+DPDK_LIB_LIST_SORTED = $(sort $(DPDK_LIB_LIST))
+
+DPDK_SHARED_LIB = $(DPDK_LIB_LIST_SORTED:%=$(DPDK_LIB_DIR)/lib%.so)
+DPDK_STATIC_LIB = $(DPDK_LIB_LIST_SORTED:%=$(DPDK_LIB_DIR)/lib%.a)
 DPDK_SHARED_LIB_LINKER_ARGS = $(call add_no_as_needed,$(DPDK_SHARED_LIB))
 DPDK_STATIC_LIB_LINKER_ARGS = $(call add_whole_archive,$(DPDK_STATIC_LIB))
 

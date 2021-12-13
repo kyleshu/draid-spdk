@@ -739,19 +739,24 @@ static void
 submit_inflight_desc(struct spdk_vhost_scsi_session *svsession,
 		     struct spdk_vhost_virtqueue *vq)
 {
-	struct spdk_vhost_session *vsession = &svsession->vsession;
-	spdk_vhost_resubmit_info *resubmit = vq->vring_inflight.resubmit_inflight;
+	struct spdk_vhost_session *vsession;
+	spdk_vhost_resubmit_info *resubmit;
 	spdk_vhost_resubmit_desc *resubmit_list;
 	uint16_t req_idx;
+	int i;
 
-	if (spdk_likely(resubmit == NULL || resubmit->resubmit_list == NULL)) {
+	resubmit = vq->vring_inflight.resubmit_inflight;
+	if (spdk_likely(resubmit == NULL || resubmit->resubmit_list == NULL ||
+			resubmit->resubmit_num == 0)) {
 		return;
 	}
 
 	resubmit_list = resubmit->resubmit_list;
-	while (resubmit->resubmit_num-- > 0) {
+	vsession = &svsession->vsession;
+
+	for (i = resubmit->resubmit_num - 1; i >= 0; --i) {
 		req_idx = resubmit_list[resubmit->resubmit_num].index;
-		SPDK_DEBUGLOG(vhost_scsi, "====== Start processing request idx %"PRIu16"======\n",
+		SPDK_DEBUGLOG(vhost_scsi, "====== Start processing resubmit request idx %"PRIu16"======\n",
 			      req_idx);
 
 		if (spdk_unlikely(req_idx >= vq->vring.size)) {
@@ -763,11 +768,8 @@ submit_inflight_desc(struct spdk_vhost_scsi_session *svsession,
 
 		process_scsi_task(vsession, vq, req_idx);
 	}
-	/* reset the submit_num to 0 to avoid underflow. */
-	resubmit->resubmit_num = 0;
 
-	free(resubmit_list);
-	resubmit->resubmit_list = NULL;
+	resubmit->resubmit_num = 0;
 }
 
 static void
@@ -1025,7 +1027,7 @@ vhost_scsi_session_add_tgt(struct spdk_vhost_dev *vdev,
 
 	rc = spdk_scsi_dev_allocate_io_channels(svsession->scsi_dev_state[scsi_tgt_num].dev);
 	if (rc != 0) {
-		SPDK_ERRLOG("%s: Couldn't allocate io channnel for SCSI target %u.\n",
+		SPDK_ERRLOG("%s: Couldn't allocate io channel for SCSI target %u.\n",
 			    vsession->name, scsi_tgt_num);
 
 		/* unset the SCSI target so that all I/O to it will be rejected */
@@ -1335,7 +1337,7 @@ alloc_task_pool(struct spdk_vhost_scsi_session *svsession)
 		task_cnt = vq->vring.size;
 		if (task_cnt > SPDK_VHOST_MAX_VQ_SIZE) {
 			/* sanity check */
-			SPDK_ERRLOG("%s: virtuque %"PRIu16" is too big. (size = %"PRIu32", max = %"PRIu32")\n",
+			SPDK_ERRLOG("%s: virtqueue %"PRIu16" is too big. (size = %"PRIu32", max = %"PRIu32")\n",
 				    vsession->name, i, task_cnt, SPDK_VHOST_MAX_VQ_SIZE);
 			free_task_pool(svsession);
 			return -1;

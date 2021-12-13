@@ -3,6 +3,7 @@
  *
  *   Copyright (c) Intel Corporation. All rights reserved.
  *   Copyright (c) 2019 Mellanox Technologies LTD. All rights reserved.
+ *   Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions
@@ -696,6 +697,7 @@ nvmf_bdev_ctrlr_nvme_passthru_io(struct spdk_bdev *bdev, struct spdk_bdev_desc *
 		}
 		req->rsp->nvme_cpl.status.sct = SPDK_NVME_SCT_GENERIC;
 		req->rsp->nvme_cpl.status.sc = SPDK_NVME_SC_INVALID_OPCODE;
+		req->rsp->nvme_cpl.status.dnr = 1;
 		return SPDK_NVMF_REQUEST_EXEC_STATUS_COMPLETE;
 	}
 
@@ -719,7 +721,13 @@ spdk_nvmf_bdev_ctrlr_nvme_passthru_admin(struct spdk_bdev *bdev, struct spdk_bde
 			return SPDK_NVMF_REQUEST_EXEC_STATUS_ASYNCHRONOUS;
 		}
 		req->rsp->nvme_cpl.status.sct = SPDK_NVME_SCT_GENERIC;
-		req->rsp->nvme_cpl.status.sc = SPDK_NVME_SC_INTERNAL_DEVICE_ERROR;
+		if (rc == -ENOTSUP) {
+			req->rsp->nvme_cpl.status.sc = SPDK_NVME_SC_INVALID_OPCODE;
+		} else {
+			req->rsp->nvme_cpl.status.sc = SPDK_NVME_SC_INTERNAL_DEVICE_ERROR;
+		}
+
+		req->rsp->nvme_cpl.status.dnr = 1;
 		return SPDK_NVMF_REQUEST_EXEC_STATUS_COMPLETE;
 	}
 

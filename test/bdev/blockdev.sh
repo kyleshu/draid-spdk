@@ -63,11 +63,13 @@ function setup_nvme_conf() {
 
 function setup_gpt_conf() {
 	$rootdir/scripts/setup.sh reset
+	get_zoned_devs
 	# Get nvme devices by following drivers' links towards nvme class
 	local nvme_devs=(/sys/bus/pci/drivers/nvme/*/nvme/nvme*/nvme*n*) nvme_dev
 	gpt_nvme=""
 	# Pick first device which doesn't have any valid partition table
 	for nvme_dev in "${nvme_devs[@]}"; do
+		[[ -z ${zoned_devs["${nvme_dev##*/}"]} ]] || continue
 		dev=/dev/${nvme_dev##*/}
 		if ! pt=$(parted "$dev" -ms print 2>&1); then
 			[[ $pt == *"$dev: unrecognised disk label"* ]] || continue
@@ -238,7 +240,7 @@ function run_qos_test() {
 	lower_limit=$((qos_limit * 9 / 10))
 	upper_limit=$((qos_limit * 11 / 10))
 
-	# QoS realization is related with bytes transfered. It currently has some variation.
+	# QoS realization is related with bytes transferred. It currently has some variation.
 	if [ $qos_result -lt $lower_limit ] || [ $qos_result -gt $upper_limit ]; then
 		echo "Failed to limit the io read rate of NULL bdev by qos"
 		$rpc_py bdev_malloc_delete $QOS_DEV_1
