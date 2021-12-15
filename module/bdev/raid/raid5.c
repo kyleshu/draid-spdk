@@ -37,8 +37,12 @@
 #include "spdk/thread.h"
 #include "spdk/string.h"
 #include "spdk/util.h"
-
 #include "spdk/log.h"
+
+#include "isa-l/include/raid.h"
+
+/* Maximum concurrent full stripe writes per io channel */
+#define RAID5_MAX_STRIPES 128
 
 struct raid5_info {
 	/* The parent raid bdev */
