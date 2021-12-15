@@ -297,7 +297,7 @@ if __name__ == "__main__":
         default=0,
     )
     p.add_argument('cache_bdev_name', help='Name of underlying cache bdev')
-    p.add_argument('core_bdev_name', help='Name of unerlying core bdev')
+    p.add_argument('core_bdev_name', help='Name of underlying core bdev')
     p.set_defaults(func=bdev_ocf_create)
 
     def bdev_ocf_delete(args):
@@ -341,7 +341,8 @@ if __name__ == "__main__":
                                                num_blocks=int(num_blocks),
                                                block_size=args.block_size,
                                                name=args.name,
-                                               uuid=args.uuid))
+                                               uuid=args.uuid,
+                                               optimal_io_boundary=args.optimal_io_boundary))
     p = subparsers.add_parser('bdev_malloc_create', aliases=['construct_malloc_bdev'],
                               help='Create a bdev with malloc backend')
     p.add_argument('-b', '--name', help="Name of the bdev")
@@ -349,6 +350,8 @@ if __name__ == "__main__":
     p.add_argument(
         'total_size', help='Size of malloc bdev in MB (float > 0)', type=float)
     p.add_argument('block_size', help='Block size for this bdev', type=int)
+    p.add_argument('-o', '--optimal-io-boundary', help="""Split on optimal IO boundary, in number of
+    blocks, default 0 (disabled)""", type=int)
     p.set_defaults(func=bdev_malloc_create)
 
     def bdev_malloc_delete(args):
@@ -473,7 +476,7 @@ if __name__ == "__main__":
     p = subparsers.add_parser('bdev_nvme_set_options', aliases=['set_bdev_nvme_options'],
                               help='Set options for the bdev nvme type. This is startup command.')
     p.add_argument('-a', '--action-on-timeout',
-                   help="Action to take on command time out. Valid valies are: none, reset, abort")
+                   help="Action to take on command time out. Valid values are: none, reset, abort")
     p.add_argument('-t', '--timeout-us',
                    help="Timeout for each command, in microseconds. If 0, don't track timeouts.", type=int)
     p.add_argument('--timeout-admin-us',
@@ -534,7 +537,8 @@ if __name__ == "__main__":
                                                          hdgst=args.hdgst,
                                                          ddgst=args.ddgst,
                                                          fabrics_timeout=args.fabrics_timeout,
-                                                         multipath=args.multipath))
+                                                         multipath=args.multipath,
+                                                         num_io_queues=args.num_io_queues))
 
     p = subparsers.add_parser('bdev_nvme_attach_controller', aliases=['construct_nvme_bdev'],
                               help='Add bdevs with nvme backend')
@@ -565,6 +569,7 @@ if __name__ == "__main__":
                    help='Enable TCP data digest.', action='store_true')
     p.add_argument('--fabrics-timeout', type=int, help='Fabrics connect timeout in microseconds')
     p.add_argument('-x', '--multipath', help='Set multipath behavior (disable, failover, multipath)')
+    p.add_argument('--num-io-queues', type=int, help='Set the number of IO queues to request during initialization.')
     p.set_defaults(func=bdev_nvme_attach_controller)
 
     def bdev_nvme_get_controllers(args):
@@ -661,7 +666,7 @@ if __name__ == "__main__":
         config_param = None
         if args.config_param:
             config_param = {}
-            for entry in args.config:
+            for entry in args.config_param:
                 parts = entry.split('=', 1)
                 if len(parts) != 2:
                     raise Exception('--config %s not in key=value form' % entry)
@@ -1372,7 +1377,7 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p.add_argument(
         'tag', help='Initiator group tag (unique, integer > 0)', type=int)
     p.add_argument('initiator_list', help="""Whitespace-separated list of initiator hostnames or IP addresses,
-    enclosed in quotes.  Example: 'ANY' or '127.0.0.1 192.168.200.100'""")
+    enclosed in quotes.  Example: 'ANY' or 'iqn.2016-06.io.spdk:host1 iqn.2016-06.io.spdk:host2'""")
     p.add_argument('netmask_list', help="""Whitespace-separated list of initiator netmasks enclosed in quotes.
     Example: '255.255.0.0 255.248.0.0' etc""")
     p.set_defaults(func=iscsi_create_initiator_group)
@@ -1400,7 +1405,8 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p.add_argument(
         'tag', help='Initiator group tag (unique, integer > 0)', type=int)
     p.add_argument('-n', dest='initiator_list', help="""Whitespace-separated list of initiator hostnames or IP addresses,
-    enclosed in quotes.  This parameter can be omitted.  Example: 'ANY' or '127.0.0.1 192.168.200.100'""", required=False)
+    enclosed in quotes.  This parameter can be omitted.  Example: 'ANY' or
+    'iqn.2016-06.io.spdk:host1 iqn.2016-06.io.spdk:host2'""", required=False)
     p.add_argument('-m', dest='netmask_list', help="""Whitespace-separated list of initiator netmasks enclosed in quotes.
     This parameter can be omitted.  Example: '255.255.0.0 255.248.0.0' etc""", required=False)
     p.set_defaults(func=iscsi_initiator_group_add_initiators)
@@ -1428,7 +1434,8 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p.add_argument(
         'tag', help='Initiator group tag (unique, integer > 0)', type=int)
     p.add_argument('-n', dest='initiator_list', help="""Whitespace-separated list of initiator hostnames or IP addresses,
-    enclosed in quotes.  This parameter can be omitted.  Example: 'ANY' or '127.0.0.1 192.168.200.100'""", required=False)
+    enclosed in quotes.  This parameter can be omitted.  Example: 'ANY' or
+    'iqn.2016-06.io.spdk:host1 iqn.2016-06.io.spdk:host2'""", required=False)
     p.add_argument('-m', dest='netmask_list', help="""Whitespace-separated list of initiator netmasks enclosed in quotes.
     This parameter can be omitted.  Example: '255.255.0.0 255.248.0.0' etc""", required=False)
     p.set_defaults(func=iscsi_initiator_group_remove_initiators)
@@ -2048,7 +2055,7 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p.add_argument('-a', '--traddr', help='NVMe-oF transport address: e.g., an ip address', required=True)
     p.add_argument('-p', '--tgt-name', help='The name of the parent NVMe-oF target (optional)', type=str)
     p.add_argument('-f', '--adrfam', help='NVMe-oF transport adrfam: e.g., ipv4, ipv6, ib, fc, intra_host')
-    p.add_argument('-s', '--trsvcid', help='NVMe-oF transport service id: e.g., a port number')
+    p.add_argument('-s', '--trsvcid', help='NVMe-oF transport service id: e.g., a port number (required for TCP and RDMA transport types)')
     p.set_defaults(func=nvmf_subsystem_remove_listener)
 
     def nvmf_subsystem_listener_set_ana_state(args):
@@ -2284,7 +2291,7 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p = subparsers.add_parser('vhost_scsi_controller_add_target',
                               aliases=['add_vhost_scsi_lun'],
                               help='Add lun to vhost controller')
-    p.add_argument('ctrlr', help='conntroller name where add lun')
+    p.add_argument('ctrlr', help='controller name where add lun')
     p.add_argument('scsi_target_num', help='scsi_target_num', type=int)
     p.add_argument('bdev_name', help='bdev name')
     p.set_defaults(func=vhost_scsi_controller_add_target)
@@ -2318,7 +2325,7 @@ Format: 'user:u1 secret:s1 muser:mu1 msecret:ms1,user:u2 secret:s2 muser:mu2 mse
     p.add_argument('--cpumask', help='cpu mask for this controller')
     p.add_argument("-r", "--readonly", action='store_true', help='Set controller as read-only')
     p.add_argument("-p", "--packed_ring", action='store_true', help='Set controller as packed ring supported')
-    p.add_argument("-l", "--packed_ring_recovery", action='store_true', help='Enable packed ring live reocvery')
+    p.add_argument("-l", "--packed_ring_recovery", action='store_true', help='Enable packed ring live recovery')
     p.set_defaults(func=vhost_create_blk_controller)
 
     def vhost_get_controllers(args):

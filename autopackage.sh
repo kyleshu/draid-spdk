@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -xe
+set -e
 
 # If the configuration of tests is not provided, no tests will be carried out.
 if [[ ! -f $1 ]]; then
@@ -75,6 +75,11 @@ timing_enter build_release
 
 config_params="$(get_config_params | sed 's/--enable-debug//g')"
 if [ $(uname -s) = Linux ]; then
+	# LTO needs a special compiler to work under clang. See detect_cc.sh for details.
+	if [[ $CC == *clang* ]]; then
+		LD=$(type -P ld.gold)
+		export LD
+	fi
 	./configure $config_params --enable-lto
 else
 	# LTO needs a special compiler to work on BSD.

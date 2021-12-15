@@ -97,7 +97,7 @@ test_cb(void *ctx, const struct spdk_nvme_cpl *cpl)
 
 /* Test that target correctly handles various IDENTIFY CNS=1 requests. */
 static void
-identify_ctrlr(void)
+admin_identify_ctrlr_verify_dptr(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -155,7 +155,7 @@ identify_ctrlr(void)
 
 /* Test that target correctly fails admin commands with fuse != 0 */
 static void
-admin_fused(void)
+admin_identify_ctrlr_verify_fused(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -204,7 +204,7 @@ admin_fused(void)
  * Associated with issue #2172.
  */
 static void
-delete_admin_queue(void)
+admin_delete_io_sq_use_admin_qid(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -229,6 +229,21 @@ delete_admin_queue(void)
 	CU_ASSERT(s.cpl.status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC);
 	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_QUEUE_IDENTIFIER);
 
+	spdk_nvme_detach(ctrlr);
+}
+
+static void
+admin_delete_io_cq_use_admin_qid(void)
+{
+	struct spdk_nvme_ctrlr *ctrlr;
+	struct spdk_nvme_cmd cmd;
+	struct status s;
+	int rc;
+
+	SPDK_CU_ASSERT_FATAL(spdk_nvme_transport_id_parse(&g_trid, g_trid_str) == 0);
+	ctrlr = spdk_nvme_connect(&g_trid, NULL, 0);
+	SPDK_CU_ASSERT_FATAL(ctrlr);
+
 	/* Try deleting CQ for QID 0 (admin queue).  This is invalid. */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opc = SPDK_NVME_OPC_DELETE_IO_CQ;
@@ -247,7 +262,7 @@ delete_admin_queue(void)
 }
 
 static void
-delete_io_sq_twice(void)
+admin_delete_io_sq_delete_sq_twice(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_io_qpair_opts opts;
@@ -314,7 +329,7 @@ delete_io_sq_twice(void)
 }
 
 static void
-delete_create_io_sq(void)
+admin_create_io_sq_verify_qsize_cqid(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_io_qpair_opts opts;
@@ -327,6 +342,7 @@ delete_create_io_sq(void)
 	void *buf;
 	uint32_t nlbas;
 	uint64_t dma_addr;
+	uint32_t ncqr;
 	int rc;
 
 	SPDK_CU_ASSERT_FATAL(spdk_nvme_transport_id_parse(&g_trid, g_trid_str) == 0);
@@ -354,6 +370,19 @@ delete_create_io_sq(void)
 	CU_ASSERT(s.cpl.status.sct == SPDK_NVME_SCT_GENERIC);
 	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_SUCCESS);
 	spdk_dma_free(buf);
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc = SPDK_NVME_OPC_GET_FEATURES;
+	/* Get Maximum Number of CQs */
+	cmd.cdw10_bits.get_features.fid = SPDK_NVME_FEAT_NUMBER_OF_QUEUES;
+
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
+
+	ncqr = ((s.cpl.cdw0 & 0xffff0000u) >> 16) + 1;
 
 	/* Delete SQ 1, this is valid. */
 	memset(&cmd, 0, sizeof(cmd));
@@ -405,9 +434,32 @@ delete_create_io_sq(void)
 	CU_ASSERT(s.cpl.status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC);
 	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_QUEUE_SIZE);
 
-	/* Create SQ 1 again, qsize is MQES, this is valid. */
-	cmd.cdw10_bits.create_io_q.qsize = cap.bits.mqes; /* 0 based value */
+	/* Create SQ 1 again, CQID is 0, this is invalid. */
+	cmd.cdw10_bits.create_io_q.qsize = cap.bits.mqes; /* 0 based value, valid */
+	cmd.cdw11_bits.create_io_sq.cqid = 0;
 	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+
+	CU_ASSERT(s.cpl.status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC);
+	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_QUEUE_IDENTIFIER);
+
+	/* Create SQ 1 again, CQID is NCQR + 1, this is invalid. */
+	cmd.cdw11_bits.create_io_sq.cqid = ncqr + 1;
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+
+	CU_ASSERT(s.cpl.status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC);
+	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_QUEUE_IDENTIFIER);
+
+	/* Create SQ 1 again, CQID is 1, this is valid. */
+	s.done = false;
+	cmd.cdw11_bits.create_io_sq.cqid = 1;
 	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
 	CU_ASSERT(rc == 0);
 
@@ -421,7 +473,81 @@ delete_create_io_sq(void)
 }
 
 static void
-delete_io_cq(void)
+admin_create_io_sq_verify_pc(void)
+{
+	struct spdk_nvme_ctrlr *ctrlr;
+	union spdk_nvme_cap_register cap;
+	struct spdk_nvme_io_qpair_opts opts;
+	struct spdk_nvme_qpair *qpair;
+	struct spdk_nvme_cmd cmd;
+	struct status s;
+	void *buf;
+	uint64_t dma_addr;
+	int rc;
+
+	SPDK_CU_ASSERT_FATAL(spdk_nvme_transport_id_parse(&g_trid, g_trid_str) == 0);
+	ctrlr = spdk_nvme_connect(&g_trid, NULL, 0);
+	SPDK_CU_ASSERT_FATAL(ctrlr);
+
+	cap = spdk_nvme_ctrlr_get_regs_cap(ctrlr);
+	/* exit the rest of test case if CAP.CQR is 0 */
+	if (!cap.bits.cqr) {
+		spdk_nvme_detach(ctrlr);
+		return;
+	}
+
+	spdk_nvme_ctrlr_get_default_io_qpair_opts(ctrlr, &opts, sizeof(opts));
+	qpair = spdk_nvme_ctrlr_alloc_io_qpair(ctrlr, &opts, sizeof(opts));
+	SPDK_CU_ASSERT_FATAL(qpair);
+
+	/* Delete SQ 1 first, this is valid. */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc = SPDK_NVME_OPC_DELETE_IO_SQ;
+	cmd.cdw10_bits.delete_io_q.qid = 1;
+
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
+
+	buf = spdk_dma_zmalloc((cap.bits.mqes + 1) * sizeof(cmd), 0x1000,  NULL);
+	SPDK_CU_ASSERT_FATAL(buf != NULL);
+
+	/* Create SQ 1, PC is 0, this is invalid */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc = SPDK_NVME_OPC_CREATE_IO_SQ;
+	cmd.cdw10_bits.create_io_q.qid = 1;
+	cmd.cdw10_bits.create_io_q.qsize = cap.bits.mqes;
+	cmd.cdw11_bits.create_io_sq.pc = 0;
+	cmd.cdw11_bits.create_io_sq.cqid = 1;
+	dma_addr = nvme_vtophys(&g_trid, buf, NULL);
+	SPDK_CU_ASSERT_FATAL(dma_addr != SPDK_VTOPHYS_ERROR);
+	cmd.dptr.prp.prp1 = dma_addr;
+
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_FIELD);
+
+	/* Create SQ 1 again, PC is 1, this is valid. */
+	s.done = false;
+	cmd.cdw11_bits.create_io_sq.pc = 1;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, NULL, 0, test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
+
+	spdk_dma_free(buf);
+	spdk_nvme_detach(ctrlr);
+}
+
+static void
+admin_delete_io_cq_delete_cq_first(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_io_qpair_opts opts;
@@ -505,7 +631,7 @@ delete_io_cq(void)
 }
 
 static void
-create_io_cq(void)
+admin_create_io_cq_verify_iv_pc(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -589,7 +715,7 @@ out:
 }
 
 static void
-property_get(void)
+fabric_property_get(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvmf_fabric_prop_set_cmd cmd;
@@ -645,7 +771,7 @@ parse_args(int argc, char **argv, struct spdk_env_opts *opts)
 }
 
 static void
-set_features_number_of_queues(void)
+admin_set_features_number_of_queues(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_io_qpair_opts opts;
@@ -706,7 +832,7 @@ set_features_number_of_queues(void)
  * 16h Host Behavior Support.
  */
 static void
-get_features(void)
+admin_get_features_mandatory_features(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -861,7 +987,7 @@ get_features(void)
 }
 
 static void
-create_max_io_qpairs(void)
+admin_create_io_qp_max_qps(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -909,7 +1035,7 @@ create_max_io_qpairs(void)
 }
 
 static void
-identify_ns(void)
+admin_identify_ns(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -1014,13 +1140,13 @@ identify_ns(void)
 	spdk_nvme_detach(ctrlr);
 }
 
-/* Mandatory Log Page Identidfiers
+/* Mandatory Log Page Identifiers
  * 01h Error Information
  * 02h SMART / Health Information
  * 03h Firmware Slot Information
  */
 static void
-mandatory_get_log_page(void)
+admin_get_log_page_mandatory_logs(void)
 {
 	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_cmd cmd;
@@ -1049,20 +1175,9 @@ mandatory_get_log_page(void)
 	wait_for_admin_completion(&s, ctrlr);
 	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
 
-	/* Log Page Offset Lower is greater than spdk_nvme_error_information_entry, invalid */
-	cmd.cdw12 = sizeof(struct spdk_nvme_error_information_entry) + 4;
-	s.done = false;
-	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
-					   sizeof(struct spdk_nvme_error_information_entry), test_cb, &s);
-	CU_ASSERT(rc == 0);
-
-	wait_for_admin_completion(&s, ctrlr);
-	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_FIELD);
-
 	/* 02h SMART / Health Information, valid */
 	cmd.cdw10_bits.get_log_page.numdl = sizeof(struct spdk_nvme_health_information_page) / 4 - 1;
 	cmd.cdw10_bits.get_log_page.lid = SPDK_NVME_LOG_HEALTH_INFORMATION;
-	cmd.cdw12 = 0;
 
 	s.done = false;
 	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
@@ -1076,6 +1191,60 @@ mandatory_get_log_page(void)
 	cmd.cdw10_bits.get_log_page.numdl = sizeof(struct spdk_nvme_firmware_page) / 4 - 1;
 	cmd.cdw10_bits.get_log_page.lid = SPDK_NVME_LOG_FIRMWARE_SLOT;
 
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
+					   sizeof(struct spdk_nvme_firmware_page), test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
+
+	spdk_dma_free(buf);
+	spdk_nvme_detach(ctrlr);
+}
+
+static void
+admin_get_log_page_with_lpo(void)
+{
+	struct spdk_nvme_ctrlr *ctrlr;
+	struct spdk_nvme_cmd cmd;
+	void *buf;
+	struct status s;
+	int rc;
+
+	SPDK_CU_ASSERT_FATAL(spdk_nvme_transport_id_parse(&g_trid, g_trid_str) == 0);
+	ctrlr = spdk_nvme_connect(&g_trid, NULL, 0);
+	SPDK_CU_ASSERT_FATAL(ctrlr);
+
+	buf = spdk_dma_zmalloc(0x1000, 0x1000, NULL);
+	SPDK_CU_ASSERT_FATAL(buf != NULL);
+
+	/* 03h Firmware Slot Information, valid */
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.opc = SPDK_NVME_OPC_GET_LOG_PAGE;
+	cmd.cdw10_bits.get_log_page.numdl = sizeof(struct spdk_nvme_firmware_page) / 4 - 1;
+	cmd.cdw10_bits.get_log_page.lid = SPDK_NVME_LOG_FIRMWARE_SLOT;
+
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
+					   sizeof(struct spdk_nvme_firmware_page), test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(!spdk_nvme_cpl_is_error(&s.cpl));
+
+	/* Log Page Offset Lower is greater than spdk_nvme_firmware_page, invalid */
+	cmd.cdw12 = sizeof(struct spdk_nvme_firmware_page) + 4;
+	s.done = false;
+	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
+					   sizeof(struct spdk_nvme_firmware_page), test_cb, &s);
+	CU_ASSERT(rc == 0);
+
+	wait_for_admin_completion(&s, ctrlr);
+	CU_ASSERT(s.cpl.status.sc == SPDK_NVME_SC_INVALID_FIELD);
+
+	/* Log Page Offset Lower is less than spdk_nvme_firmware_page, but greater than 0, valid */
+	cmd.cdw12 = 4;
 	s.done = false;
 	rc = spdk_nvme_ctrlr_cmd_admin_raw(ctrlr, &cmd, buf,
 					   sizeof(struct spdk_nvme_firmware_page), test_cb, &s);
@@ -1116,19 +1285,22 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	CU_ADD_TEST(suite, identify_ctrlr);
-	CU_ADD_TEST(suite, admin_fused);
-	CU_ADD_TEST(suite, delete_admin_queue);
-	CU_ADD_TEST(suite, delete_io_sq_twice);
-	CU_ADD_TEST(suite, delete_create_io_sq);
-	CU_ADD_TEST(suite, delete_io_cq);
-	CU_ADD_TEST(suite, create_io_cq);
-	CU_ADD_TEST(suite, get_features);
-	CU_ADD_TEST(suite, set_features_number_of_queues);
-	CU_ADD_TEST(suite, property_get);
-	CU_ADD_TEST(suite, create_max_io_qpairs);
-	CU_ADD_TEST(suite, identify_ns);
-	CU_ADD_TEST(suite, mandatory_get_log_page);
+	CU_ADD_TEST(suite, admin_identify_ctrlr_verify_dptr);
+	CU_ADD_TEST(suite, admin_identify_ctrlr_verify_fused);
+	CU_ADD_TEST(suite, admin_identify_ns);
+	CU_ADD_TEST(suite, admin_get_features_mandatory_features);
+	CU_ADD_TEST(suite, admin_set_features_number_of_queues);
+	CU_ADD_TEST(suite, admin_get_log_page_mandatory_logs);
+	CU_ADD_TEST(suite, admin_get_log_page_with_lpo);
+	CU_ADD_TEST(suite, fabric_property_get);
+	CU_ADD_TEST(suite, admin_delete_io_sq_use_admin_qid);
+	CU_ADD_TEST(suite, admin_delete_io_sq_delete_sq_twice);
+	CU_ADD_TEST(suite, admin_delete_io_cq_use_admin_qid);
+	CU_ADD_TEST(suite, admin_delete_io_cq_delete_cq_first);
+	CU_ADD_TEST(suite, admin_create_io_cq_verify_iv_pc);
+	CU_ADD_TEST(suite, admin_create_io_sq_verify_qsize_cqid);
+	CU_ADD_TEST(suite, admin_create_io_sq_verify_pc);
+	CU_ADD_TEST(suite, admin_create_io_qp_max_qps);
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);
 	CU_basic_run_tests();

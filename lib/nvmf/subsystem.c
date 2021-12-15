@@ -323,7 +323,6 @@ spdk_nvmf_subsystem_create(struct spdk_nvmf_tgt *tgt,
 		 MODEL_NUMBER_DEFAULT);
 
 	tgt->subsystems[sid] = subsystem;
-	nvmf_update_discovery_log(tgt, NULL);
 
 	return subsystem;
 }
@@ -358,6 +357,7 @@ _nvmf_subsystem_remove_listener(struct spdk_nvmf_subsystem *subsystem,
 	}
 
 	TAILQ_REMOVE(&subsystem->listeners, listener, link);
+	nvmf_update_discovery_log(listener->subsystem->tgt, NULL);
 	free(listener->ana_state);
 	free(listener);
 }
@@ -402,7 +402,6 @@ _nvmf_subsystem_destroy(struct spdk_nvmf_subsystem *subsystem)
 	free(subsystem->ana_group);
 
 	subsystem->tgt->subsystems[subsystem->id] = NULL;
-	nvmf_update_discovery_log(subsystem->tgt, NULL);
 
 	pthread_mutex_destroy(&subsystem->mutex);
 
@@ -538,6 +537,11 @@ nvmf_subsystem_set_state(struct spdk_nvmf_subsystem *subsystem,
 		if (actual_old_state == SPDK_NVMF_SUBSYSTEM_RESUMING &&
 		    state == SPDK_NVMF_SUBSYSTEM_PAUSING) {
 			expected_old_state = SPDK_NVMF_SUBSYSTEM_RESUMING;
+		}
+		/* This is for the case when stopping paused subsystem */
+		if (actual_old_state == SPDK_NVMF_SUBSYSTEM_PAUSED &&
+		    state == SPDK_NVMF_SUBSYSTEM_DEACTIVATING) {
+			expected_old_state = SPDK_NVMF_SUBSYSTEM_PAUSED;
 		}
 		actual_old_state = expected_old_state;
 		__atomic_compare_exchange_n(&subsystem->state, &actual_old_state, state, false,
@@ -833,7 +837,9 @@ spdk_nvmf_subsystem_add_host(struct spdk_nvmf_subsystem *subsystem, const char *
 
 	TAILQ_INSERT_HEAD(&subsystem->hosts, host, link);
 
-	nvmf_update_discovery_log(subsystem->tgt, hostnqn);
+	if (!TAILQ_EMPTY(&subsystem->listeners)) {
+		nvmf_update_discovery_log(subsystem->tgt, hostnqn);
+	}
 
 	pthread_mutex_unlock(&subsystem->mutex);
 
@@ -942,7 +948,9 @@ spdk_nvmf_subsystem_set_allow_any_host(struct spdk_nvmf_subsystem *subsystem, bo
 {
 	pthread_mutex_lock(&subsystem->mutex);
 	subsystem->flags.allow_any_host = allow_any_host;
-	nvmf_update_discovery_log(subsystem->tgt, NULL);
+	if (!TAILQ_EMPTY(&subsystem->listeners)) {
+		nvmf_update_discovery_log(subsystem->tgt, NULL);
+	}
 	pthread_mutex_unlock(&subsystem->mutex);
 
 	return 0;
@@ -2693,7 +2701,7 @@ nvmf_ns_reservation_acquire(struct spdk_nvmf_ns *ns,
 			/* do nothing */
 			update_sgroup = false;
 		} else if (ns->holder == NULL) {
-			/* fisrt time to acquire the reservation */
+			/* first time to acquire the reservation */
 			nvmf_ns_reservation_acquire_reservation(ns, key.crkey, rtype, reg);
 		} else {
 			SPDK_ERRLOG("Invalid rtype or current registrant is not holder\n");

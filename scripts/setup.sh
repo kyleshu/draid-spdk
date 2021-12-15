@@ -448,6 +448,12 @@ configure_linux_hugepages() {
 		nodes[${node##*node}]=$node/hugepages/hugepages-${HUGEPGSZ}kB/nr_hugepages
 	done
 
+	if ((${#nodes[@]} == 0)); then
+		# No NUMA support? Fallback to common interface
+		check_hugepages_alloc /proc/sys/vm/nr_hugepages
+		return 0
+	fi
+
 	IFS="," read -ra nodes_to_use <<< "$HUGENODE"
 	if ((${#nodes_to_use[@]} == 0)); then
 		nodes_to_use[0]=0
@@ -776,7 +782,7 @@ fi
 
 if [[ $os == Linux ]]; then
 	if [[ -n $HUGEPGSZ && ! -e /sys/kernel/mm/hugepages/hugepages-${HUGEPGSZ}kB ]]; then
-		echo "${HUGEPGSZ}kB is not supported by the running kernel, ingoring" >&2
+		echo "${HUGEPGSZ}kB is not supported by the running kernel, ignoring" >&2
 		unset -v HUGEPGSZ
 	fi
 
@@ -788,6 +794,7 @@ if [[ $os == Linux ]]; then
 		configure_linux
 	elif [ "$mode" == "cleanup" ]; then
 		cleanup_linux
+		clear_hugepages
 	elif [ "$mode" == "reset" ]; then
 		reset_linux
 	elif [ "$mode" == "status" ]; then

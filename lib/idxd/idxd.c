@@ -47,11 +47,6 @@
 #define ALIGN_4K 0x1000
 #define USERSPACE_DRIVER_NAME "user"
 #define KERNEL_DRIVER_NAME "kernel"
-/*
- * Need to limit how many completions we reap in one poller to avoid starving
- * other threads as callers can submit new operations on the polling thread.
- */
-#define MAX_COMPLETIONS_PER_POLL 16
 
 static STAILQ_HEAD(, spdk_idxd_impl) g_idxd_impls = STAILQ_HEAD_INITIALIZER(g_idxd_impls);
 static struct spdk_idxd_impl *g_idxd_impl;
@@ -767,7 +762,7 @@ spdk_idxd_batch_submit(struct spdk_idxd_io_channel *chan, struct idxd_batch *bat
 		return rc;
 	}
 
-	/* TODO: pre-tranlate these when allocated for max batch size. */
+	/* TODO: pre-translate these when allocated for max batch size. */
 	rc = _vtophys(batch->user_desc, &desc_addr, batch->index * sizeof(struct idxd_hw_desc));
 	if (rc) {
 		TAILQ_INSERT_TAIL(&chan->ops_pool, op, link);
@@ -1120,10 +1115,6 @@ spdk_idxd_process_events(struct spdk_idxd_io_channel *chan)
 	assert(chan != NULL);
 
 	TAILQ_FOREACH_SAFE(op, &chan->ops_outstanding, link, tmp) {
-		if (rc == MAX_COMPLETIONS_PER_POLL) {
-			break;
-		}
-
 		if (IDXD_COMPLETION(op->hw.status)) {
 
 			TAILQ_REMOVE(&chan->ops_outstanding, op, link);
@@ -1158,7 +1149,7 @@ spdk_idxd_process_events(struct spdk_idxd_io_channel *chan)
 			if (op->desc->opcode == IDXD_OPCODE_BATCH) {
 				_free_batch(op->batch, chan);
 			} else if (op->batch == NULL) {
-				TAILQ_INSERT_TAIL(&chan->ops_pool, op, link);
+				TAILQ_INSERT_HEAD(&chan->ops_pool, op, link);
 			}
 
 			if (cb_fn) {

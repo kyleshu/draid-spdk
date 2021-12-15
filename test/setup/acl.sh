@@ -3,6 +3,8 @@ testdir=$(readlink -f "$(dirname "$0")")
 rootdir=$(readlink -f "$testdir/../../")
 source "$testdir/common.sh"
 
+get_zoned_devs
+
 declare -a devs=()
 declare -A drivers=()
 
@@ -12,6 +14,7 @@ collect_setup_devs() {
 	while read -r _ dev _ _ _ driver _; do
 		[[ $dev == *:*:*.* ]] || continue
 		[[ $driver == nvme ]] || continue
+		[[ ${zoned_devs[*]} == *"$dev"* ]] && continue
 		devs+=("$dev") drivers["$dev"]=$driver
 	done < <(setup output status)
 	((${#devs[@]} > 0))
@@ -28,9 +31,7 @@ verify() {
 }
 
 denied() {
-	# Include OCSSD devices in the PCI_BLOCKED to make sure we don't unbind
-	# them from the pci-stub (see autotest.sh for details).
-	PCI_BLOCKED="$OCSSD_PCI_DEVICES ${devs[0]}" setup output config \
+	PCI_BLOCKED="$PCI_BLOCKED ${devs[0]}" setup output config \
 		| grep "Skipping denied controller at ${devs[0]}"
 	verify "${devs[0]}"
 	setup reset

@@ -119,8 +119,6 @@ export SPDK_TEST_VHOST_INIT
 export SPDK_TEST_PMDK
 : ${SPDK_TEST_LVOL=0}
 export SPDK_TEST_LVOL
-: ${SPDK_TEST_JSON=0}
-export SPDK_TEST_JSON
 : ${SPDK_TEST_REDUCE=0}
 export SPDK_TEST_REDUCE
 : ${SPDK_RUN_ASAN=0}
@@ -656,8 +654,7 @@ function process_core() {
 	# potential cores. If we are called just for cleanup at the very end,
 	# don't wait since all the tests ended successfully, hence having any
 	# critical cores lying around is unlikely.
-	local es=$?
-	((es != 0)) && sleep 5s
+	((autotest_es != 0)) && sleep 5
 
 	local coredumps core
 
@@ -1221,6 +1218,16 @@ function get_bdev_size() {
 }
 
 function autotest_cleanup() {
+	local autotest_es=$?
+	xtrace_disable
+
+	# catch any stray core files and kill all remaining SPDK processes. Update
+	# autotest_es in case autotest reported success but cores and/or processes
+	# were left behind regardless.
+
+	process_core || autotest_es=1
+	reap_spdk_processes || autotest_es=1
+
 	$rootdir/scripts/setup.sh reset
 	$rootdir/scripts/setup.sh cleanup
 	if [ $(uname -s) = "Linux" ]; then
@@ -1237,7 +1244,6 @@ function autotest_cleanup() {
 	if [[ -e /proc/$udevadm_pid/status ]]; then
 		kill "$udevadm_pid" || :
 	fi
-	revert_soft_roce
 
 	shopt -s nullglob
 	local storage_fallback_purge=("${TMPDIR:-/tmp}/spdk."??????)
@@ -1246,6 +1252,9 @@ function autotest_cleanup() {
 	if ((${#storage_fallback_purge[@]} > 0)); then
 		rm -rf "${storage_fallback_purge[@]}"
 	fi
+
+	xtrace_restore
+	return $autotest_es
 }
 
 function freebsd_update_contigmem_mod() {
@@ -1335,7 +1344,7 @@ function nvme_namespace_revert() {
 			# This assumes every NVMe controller contains single namespace,
 			# encompassing Total NVM Capacity and formatted as 512 block size.
 			# 512 block size is needed for test/vhost/vhost_boot.sh to
-			# succesfully run.
+			# successfully run.
 
 			unvmcap=$(nvme id-ctrl ${nvme_ctrlr} | grep unvmcap | cut -d: -f2)
 			if [[ "$unvmcap" -eq 0 ]]; then
@@ -1402,6 +1411,73 @@ function pap() {
 		FILE
 		rm -f "$file"
 	done < <(find "$@" -type f | sort -u)
+}
+
+function get_proc_paths() {
+	local procs proc
+	if [[ $(uname -s) == Linux ]]; then
+		for proc in /proc/[0-9]*; do
+			[[ -e $proc/exe ]] || continue
+			procs[${proc##*/}]=$(readlink -f "$proc/exe")
+		done
+	elif [[ $(uname -s) == FreeBSD ]]; then
+		while read -r proc _ _ path; do
+			[[ -e $path ]] || continue
+			procs[proc]=$path
+		done < <(procstat -ab)
+	fi
+
+	for proc in "${!procs[@]}"; do
+		echo "$proc" "${procs[proc]}"
+	done
+}
+
+is_exec_file() { [[ -f $1 && $(file "$1") =~ ELF.+executable ]]; }
+
+function reap_spdk_processes() {
+	local bins bin
+	local misc_bins
+
+	while read -r bin; do
+		is_exec_file "$bin" && misc_bins+=("$bin")
+	done < <(find "$rootdir"/test/{app,env,event} -type f)
+
+	mapfile -t bins < <(readlink -f "$SPDK_BIN_DIR/"* "$SPDK_EXAMPLE_DIR/"* "${misc_bins[@]}")
+
+	local spdk_pid spdk_pids path
+	while read -r spdk_pid path; do
+		if [[ ${bins[*]/$path/} != "${bins[*]}" ]]; then
+			echo "$path is still up ($spdk_pid), killing"
+			spdk_pids[spdk_pid]=$path
+		fi
+	done < <(get_proc_paths)
+
+	((${#spdk_pids[@]} > 0)) || return 0
+
+	kill -SIGTERM "${!spdk_pids[@]}" 2> /dev/null || :
+	# Wait a bit and then use the stick
+	sleep 2
+	kill -SIGKILL "${!spdk_pids[@]}" 2> /dev/null || :
+
+	return 1
+}
+
+function is_block_zoned() {
+	local device=$1
+
+	[[ -e /sys/block/$device/queue/zoned ]] || return 1
+	[[ $(< "/sys/block/$device/queue/zoned") != none ]]
+}
+
+function get_zoned_devs() {
+	local -gA zoned_devs=()
+	local nvme bdf
+
+	for nvme in /sys/block/nvme*; do
+		if is_block_zoned "${nvme##*/}"; then
+			zoned_devs["${nvme##*/}"]=$(< "$nvme/device/address")
+		fi
+	done
 }
 
 # Define temp storage for all the tests. Look for 2GB at minimum

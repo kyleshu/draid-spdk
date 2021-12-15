@@ -38,6 +38,7 @@ include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
 .PHONY: all clean install uninstall
 
 DPDK_OPTS = -Denable_docs=false
+DPDK_OPTS += -Dtests=false
 DPDK_CFLAGS =
 
 DPDK_KMODS = false
@@ -59,8 +60,9 @@ DPDK_DRIVERS += crypto/qat compress/qat common/qat
 endif
 
 ifeq ($(CONFIG_CRYPTO),y)
-# crypto/qat is just a stub, the compress/qat pmd is used instead
-DPDK_DRIVERS += crypto crypto/aesni_mb
+DPDK_DRIVERS += crypto crypto/ipsec_mb
+# aesni_mb is name of the PMD in DPDK 21.08 and earlier
+DPDK_DRIVERS += crypto/aesni_mb
 DPDK_CFLAGS += -I$(IPSEC_MB_DIR)
 DPDK_LDFLAGS += -L$(IPSEC_MB_DIR)
 endif
@@ -112,7 +114,7 @@ ifeq ($(shell test $(GCC_MAJOR) -ge 10 && echo 1), 1)
 #1. gcc 10 complains on operations with zero size arrays in rte_cryptodev.c, so
 #disable this warning
 #2. gcc 10 disables fcommon by default and complains on multiple definition of
-#aesni_mb_logtype_driver symbol which is defined in header file and presented in sevral
+#aesni_mb_logtype_driver symbol which is defined in header file and presented in several
 #translation units
 DPDK_CFLAGS += -Wno-stringop-overflow -fcommon
 endif
@@ -120,10 +122,6 @@ endif
 
 # Force-disable scan-build
 SUB_CC = $(patsubst %ccc-analyzer,$(DEFAULT_CC),$(CC))
-
-DPDK_ALL_DRIVER_DIRS = $(shell find $(SPDK_ROOT_DIR)/dpdk/drivers -mindepth 1 -type d)
-DPDK_ALL_DRIVERS = $(DPDK_ALL_DRIVER_DIRS:$(SPDK_ROOT_DIR)/dpdk/drivers/%=%)
-DPDK_DISABLED_DRVERS = $(filter-out $(DPDK_DRIVERS),$(DPDK_ALL_DRIVERS))
 
 ifneq ($(OS),FreeBSD)
 SED_INPLACE_FLAG = "-i"
@@ -136,7 +134,7 @@ endif
 # Some ninja versions come with a (broken?) jobserver which defaults to use
 # only 1 thread for the build. We workaround this by specifying -j to ninja
 # with the same value as top-makefile. This is OK as long as DPDK is not built
-# in parralel with anything else, which is the case for now.
+# in parallel with anything else, which is the case for now.
 ifeq ($(MAKE_PID),)
 MAKE_PID := $(shell echo $$PPID)
 endif
@@ -165,7 +163,7 @@ all: $(SPDK_ROOT_DIR)/dpdk/build-tmp
 
 $(SPDK_ROOT_DIR)/dpdk/build-tmp: $(SPDK_ROOT_DIR)/mk/cc.mk $(SPDK_ROOT_DIR)/include/spdk/config.h
 	$(Q)rm -rf $(SPDK_ROOT_DIR)/dpdk/build $(SPDK_ROOT_DIR)/dpdk/build-tmp
-	$(Q)cd "$(SPDK_ROOT_DIR)/dpdk"; CC="$(SUB_CC)" meson --prefix="$(MESON_PREFIX)" --libdir lib -Dc_args="$(DPDK_CFLAGS)" -Dc_link_args="$(DPDK_LDFLAGS)" $(DPDK_OPTS) -Ddisable_drivers="$(shell echo $(DPDK_DISABLED_DRVERS) | sed -E "s/ +/,/g")" build-tmp
+	$(Q)cd "$(SPDK_ROOT_DIR)/dpdk"; CC="$(SUB_CC)" meson --prefix="$(MESON_PREFIX)" --libdir lib -Dc_args="$(DPDK_CFLAGS)" -Dc_link_args="$(DPDK_LDFLAGS)" $(DPDK_OPTS) -Denable_drivers="$(shell echo $(DPDK_DRIVERS) | sed -E "s/ +/,/g")" build-tmp
 	$(Q)sed $(SED_INPLACE_FLAG) 's/#define RTE_EAL_PMD_PATH .*/#define RTE_EAL_PMD_PATH ""/g' $(SPDK_ROOT_DIR)/dpdk/build-tmp/rte_build_config.h
 	$(Q) \
 	# TODO Meson build adds libbsd dependency when it's available. This means any app will be \

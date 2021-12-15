@@ -4927,6 +4927,10 @@ spdk_bdev_nvme_admin_passthru(struct spdk_bdev_desc *desc, struct spdk_io_channe
 		return -EBADF;
 	}
 
+	if (spdk_unlikely(!bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN))) {
+		return -ENOTSUP;
+	}
+
 	bdev_io = bdev_channel_get_io(channel);
 	if (!bdev_io) {
 		return -ENOMEM;
@@ -4965,6 +4969,10 @@ spdk_bdev_nvme_io_passthru(struct spdk_bdev_desc *desc, struct spdk_io_channel *
 		return -EBADF;
 	}
 
+	if (spdk_unlikely(!bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_IO))) {
+		return -ENOTSUP;
+	}
+
 	bdev_io = bdev_channel_get_io(channel);
 	if (!bdev_io) {
 		return -ENOMEM;
@@ -5001,6 +5009,10 @@ spdk_bdev_nvme_io_passthru_md(struct spdk_bdev_desc *desc, struct spdk_io_channe
 		 *  do not allow io_passthru with a read-only descriptor.
 		 */
 		return -EBADF;
+	}
+
+	if (spdk_unlikely(!bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_IO_MD))) {
+		return -ENOTSUP;
 	}
 
 	bdev_io = bdev_channel_get_io(channel);
@@ -5590,6 +5602,17 @@ spdk_bdev_io_get_nvme_status(const struct spdk_bdev_io *bdev_io, uint32_t *cdw0,
 	assert(sct != NULL);
 	assert(sc != NULL);
 	assert(cdw0 != NULL);
+
+	if (spdk_unlikely(bdev_io->type == SPDK_BDEV_IO_TYPE_ABORT)) {
+		*sct = SPDK_NVME_SCT_GENERIC;
+		*sc = SPDK_NVME_SC_SUCCESS;
+		if (bdev_io->internal.status == SPDK_BDEV_IO_STATUS_SUCCESS) {
+			*cdw0 = 0;
+		} else {
+			*cdw0 = 1U;
+		}
+		return;
+	}
 
 	if (bdev_io->internal.status == SPDK_BDEV_IO_STATUS_NVME_ERROR) {
 		*sct = bdev_io->internal.error.nvme.sct;

@@ -53,16 +53,22 @@
 
 #define NVMF_VFIO_USER_DEFAULT_MAX_QUEUE_DEPTH 256
 #define NVMF_VFIO_USER_DEFAULT_AQ_DEPTH 32
-#define NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR 64
 #define NVMF_VFIO_USER_DEFAULT_MAX_IO_SIZE ((NVMF_REQ_MAX_BUFFERS - 1) << SHIFT_4KB)
 #define NVMF_VFIO_USER_DEFAULT_IO_UNIT_SIZE NVMF_VFIO_USER_DEFAULT_MAX_IO_SIZE
 
-#define NVMF_VFIO_USER_DOORBELLS_OFFSET	0x1000
+#define NVME_DOORBELLS_OFFSET	0x1000
 #define NVMF_VFIO_USER_DOORBELLS_SIZE 0x1000
 
-#define NVME_REG_CFG_SIZE       0x1000
-#define NVME_REG_BAR0_SIZE      0x4000
-#define NVME_IRQ_MSIX_NUM	NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR
+#define NVME_REG_CFG_SIZE       PCI_CFG_SPACE_EXP_SIZE
+#define NVME_REG_BAR0_SIZE      (NVME_DOORBELLS_OFFSET + NVMF_VFIO_USER_DOORBELLS_SIZE)
+#define NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR ((NVMF_VFIO_USER_DOORBELLS_SIZE) / 8)
+#define NVME_IRQ_MSIX_NUM	NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR
+/* MSIX Table Size */
+#define NVME_BAR4_SIZE		SPDK_ALIGN_CEIL((NVME_IRQ_MSIX_NUM * 16), 0x1000)
+/* MSIX Pending Bit Array Size */
+#define NVME_BAR5_SIZE		SPDK_ALIGN_CEIL((NVME_IRQ_MSIX_NUM / 8), 0x1000)
+
+#define NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR (NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR / 4)
 
 struct nvmf_vfio_user_req;
 struct nvmf_vfio_user_qpair;
@@ -170,8 +176,9 @@ struct nvmf_vfio_user_ctrlr {
 	struct spdk_poller			*vfu_ctx_poller;
 
 	uint16_t				cntlid;
+	struct spdk_nvmf_ctrlr			*ctrlr;
 
-	struct nvmf_vfio_user_qpair		*qp[NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR];
+	struct nvmf_vfio_user_qpair		*qp[NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR];
 
 	TAILQ_ENTRY(nvmf_vfio_user_ctrlr)	link;
 
@@ -505,7 +512,9 @@ nvmf_vfio_user_destroy_endpoint(struct nvmf_vfio_user_endpoint *endpoint)
 		close(endpoint->devmem_fd);
 	}
 
-	vfu_destroy_ctx(endpoint->vfu_ctx);
+	if (endpoint->vfu_ctx) {
+		vfu_destroy_ctx(endpoint->vfu_ctx);
+	}
 
 	pthread_mutex_destroy(&endpoint->lock);
 	free(endpoint);
@@ -554,9 +563,9 @@ nvmf_vfio_user_create(struct spdk_nvmf_transport_opts *opts)
 	struct nvmf_vfio_user_transport *vu_transport;
 	int err;
 
-	if (opts->max_qpairs_per_ctrlr > NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR) {
+	if (opts->max_qpairs_per_ctrlr > NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR) {
 		SPDK_ERRLOG("Invalid max_qpairs_per_ctrlr=%d, supported max_qpairs_per_ctrlr=%d\n",
-			    opts->max_qpairs_per_ctrlr, NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR);
+			    opts->max_qpairs_per_ctrlr, NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR);
 		return NULL;
 	}
 
@@ -886,7 +895,7 @@ post_completion(struct nvmf_vfio_user_ctrlr *ctrlr, struct nvme_q *cq,
 
 	/*
 	 * this function now executes at SPDK thread context, we
-	 * might be triggerring interrupts from vfio-user thread context so
+	 * might be triggering interrupts from vfio-user thread context so
 	 * check for race conditions.
 	 */
 	if (ctrlr_interrupt_enabled(ctrlr) && cq->ien) {
@@ -906,7 +915,7 @@ io_q_exists(struct nvmf_vfio_user_ctrlr *vu_ctrlr, const uint16_t qid, const boo
 {
 	assert(vu_ctrlr != NULL);
 
-	if (qid == 0 || qid >= NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR) {
+	if (qid == 0 || qid >= NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR) {
 		return false;
 	}
 
@@ -1096,7 +1105,7 @@ static int
 handle_create_io_q(struct nvmf_vfio_user_ctrlr *ctrlr,
 		   struct spdk_nvme_cmd *cmd, const bool is_cq)
 {
-	uint16_t qid;
+	uint16_t qid, cqid;
 	uint32_t qsize;
 	uint16_t sc = SPDK_NVME_SC_SUCCESS;
 	uint16_t sct = SPDK_NVME_SCT_GENERIC;
@@ -1161,17 +1170,17 @@ handle_create_io_q(struct nvmf_vfio_user_ctrlr *ctrlr,
 		io_q->iv = cmd->cdw11_bits.create_io_cq.iv;
 		io_q->phase = true;
 	} else {
-		if (cmd->cdw11_bits.create_io_sq.cqid == 0) {
-			SPDK_ERRLOG("%s: invalid CQID 0\n", ctrlr_id(ctrlr));
+		cqid = cmd->cdw11_bits.create_io_sq.cqid;
+		if (cqid == 0 || cqid >= vu_transport->transport.opts.max_qpairs_per_ctrlr) {
+			SPDK_ERRLOG("%s: invalid CQID %u\n", ctrlr_id(ctrlr), cqid);
 			sct = SPDK_NVME_SCT_COMMAND_SPECIFIC;
 			sc = SPDK_NVME_SC_INVALID_QUEUE_IDENTIFIER;
 			goto out;
 
 		}
 		/* CQ must be created before SQ */
-		if (!io_q_exists(ctrlr, cmd->cdw11_bits.create_io_sq.cqid, true)) {
-			SPDK_ERRLOG("%s: CQ%d does not exist\n", ctrlr_id(ctrlr),
-				    cmd->cdw11_bits.create_io_sq.cqid);
+		if (!io_q_exists(ctrlr, cqid, true)) {
+			SPDK_ERRLOG("%s: CQ%u does not exist\n", ctrlr_id(ctrlr), cqid);
 			sct = SPDK_NVME_SCT_COMMAND_SPECIFIC;
 			sc = SPDK_NVME_SC_COMPLETION_QUEUE_INVALID;
 			goto out;
@@ -1183,14 +1192,14 @@ handle_create_io_q(struct nvmf_vfio_user_ctrlr *ctrlr,
 			goto out;
 		}
 		/* TODO: support shared IO CQ */
-		if (qid != cmd->cdw11_bits.create_io_sq.cqid) {
+		if (qid != cqid) {
 			SPDK_ERRLOG("%s: doesn't support shared CQ now\n", ctrlr_id(ctrlr));
 			sct = SPDK_NVME_SCT_COMMAND_SPECIFIC;
 			sc = SPDK_NVME_SC_INVALID_QUEUE_IDENTIFIER;
 		}
 
 		io_q = &ctrlr->qp[qid]->sq;
-		io_q->cqid = cmd->cdw11_bits.create_io_sq.cqid;
+		io_q->cqid = cqid;
 		SPDK_DEBUGLOG(nvmf_vfio, "%s: SQ%d CQID=%d\n", ctrlr_id(ctrlr),
 			      qid, io_q->cqid);
 	}
@@ -1664,7 +1673,7 @@ handle_dbl_access(struct nvmf_vfio_user_ctrlr *ctrlr, uint32_t *buf,
 		return -1;
 	}
 
-	pos -= NVMF_VFIO_USER_DOORBELLS_OFFSET;
+	pos -= NVME_DOORBELLS_OFFSET;
 
 	/* pos must be dword aligned */
 	if ((pos & 0x3) != 0) {
@@ -1676,7 +1685,7 @@ handle_dbl_access(struct nvmf_vfio_user_ctrlr *ctrlr, uint32_t *buf,
 	/* convert byte offset to array index */
 	pos >>= 2;
 
-	if (pos >= NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR * 2) {
+	if (pos >= NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR * 2) {
 		SPDK_ERRLOG("%s: bad doorbell index %#lx\n", ctrlr_id(ctrlr), pos);
 		errno = EINVAL;
 		return -1;
@@ -1709,7 +1718,7 @@ access_bar0_fn(vfu_ctx_t *vfu_ctx, char *buf, size_t count, loff_t pos,
 		      endpoint_id(endpoint), is_write ? "write" : "read",
 		      ctrlr, count, pos);
 
-	if (pos >= NVMF_VFIO_USER_DOORBELLS_OFFSET) {
+	if (pos >= NVME_DOORBELLS_OFFSET) {
 		/*
 		 * The fact that the doorbells can be memory mapped doesn't mean
 		 * that the client (VFIO in QEMU) is obliged to memory map them,
@@ -1775,10 +1784,10 @@ access_pci_config(vfu_ctx_t *vfu_ctx, char *buf, size_t count, loff_t offset,
 		return -1;
 	}
 
-	if (offset + count > PCI_CFG_SPACE_EXP_SIZE) {
+	if (offset + count > NVME_REG_CFG_SIZE) {
 		SPDK_ERRLOG("%s: access past end of extended PCI configuration space, want=%ld+%ld, max=%d\n",
 			    endpoint_id(endpoint), offset, count,
-			    PCI_CFG_SPACE_EXP_SIZE);
+			    NVME_REG_CFG_SIZE);
 		errno = ERANGE;
 		return -1;
 	}
@@ -1863,9 +1872,9 @@ vfio_user_dev_info_fill(struct nvmf_vfio_user_transport *vu_transport,
 		.mpba = {.pbir = 0x5, .pbao = 0x0}
 	};
 
-	static struct iovec sparse_mmap[] = {
+	struct iovec sparse_mmap[] = {
 		{
-			.iov_base = (void *)NVMF_VFIO_USER_DOORBELLS_OFFSET,
+			.iov_base = (void *)NVME_DOORBELLS_OFFSET,
 			.iov_len = NVMF_VFIO_USER_DOORBELLS_SIZE,
 		},
 	};
@@ -1875,7 +1884,7 @@ vfio_user_dev_info_fill(struct nvmf_vfio_user_transport *vu_transport,
 		SPDK_ERRLOG("vfu_ctx %p failed to initialize PCI\n", vfu_ctx);
 		return ret;
 	}
-	vfu_pci_set_id(vfu_ctx, 0x4e58, 0x0001, 0, 0);
+	vfu_pci_set_id(vfu_ctx, SPDK_PCI_VID_NUTANIX, 0x0001, SPDK_PCI_VID_NUTANIX, 0);
 	/*
 	 * 0x02, controller uses the NVM Express programming interface
 	 * 0x08, non-volatile memory controller
@@ -1923,14 +1932,14 @@ vfio_user_dev_info_fill(struct nvmf_vfio_user_transport *vu_transport,
 		return ret;
 	}
 
-	ret = vfu_setup_region(vfu_ctx, VFU_PCI_DEV_BAR4_REGION_IDX, PAGE_SIZE,
+	ret = vfu_setup_region(vfu_ctx, VFU_PCI_DEV_BAR4_REGION_IDX, NVME_BAR4_SIZE,
 			       NULL, VFU_REGION_FLAG_RW, NULL, 0, -1, 0);
 	if (ret < 0) {
 		SPDK_ERRLOG("vfu_ctx %p failed to setup bar 4\n", vfu_ctx);
 		return ret;
 	}
 
-	ret = vfu_setup_region(vfu_ctx, VFU_PCI_DEV_BAR5_REGION_IDX, PAGE_SIZE,
+	ret = vfu_setup_region(vfu_ctx, VFU_PCI_DEV_BAR5_REGION_IDX, NVME_BAR5_SIZE,
 			       NULL, VFU_REGION_FLAG_RW, NULL, 0, -1, 0);
 	if (ret < 0) {
 		SPDK_ERRLOG("vfu_ctx %p failed to setup bar 5\n", vfu_ctx);
@@ -1989,7 +1998,7 @@ free_ctrlr(struct nvmf_vfio_user_ctrlr *ctrlr, bool free_qps)
 	SPDK_DEBUGLOG(nvmf_vfio, "free %s\n", ctrlr_id(ctrlr));
 
 	if (free_qps) {
-		for (i = 0; i < NVMF_VFIO_USER_DEFAULT_MAX_QPAIRS_PER_CTRLR; i++) {
+		for (i = 0; i < NVMF_VFIO_USER_MAX_QPAIRS_PER_CTRLR; i++) {
 			free_qp(ctrlr, i);
 		}
 	}
@@ -2045,85 +2054,94 @@ nvmf_vfio_user_listen(struct spdk_nvmf_transport *transport,
 {
 	struct nvmf_vfio_user_transport *vu_transport;
 	struct nvmf_vfio_user_endpoint *endpoint, *tmp;
-	char *path = NULL;
+	char path[PATH_MAX] = {};
 	char uuid[PATH_MAX] = {};
-	int fd;
-	int err;
+	int ret;
 
 	vu_transport = SPDK_CONTAINEROF(transport, struct nvmf_vfio_user_transport,
 					transport);
 
+	pthread_mutex_lock(&vu_transport->lock);
 	TAILQ_FOREACH_SAFE(endpoint, &vu_transport->endpoints, link, tmp) {
 		/* Only compare traddr */
 		if (strncmp(endpoint->trid.traddr, trid->traddr, sizeof(endpoint->trid.traddr)) == 0) {
+			pthread_mutex_unlock(&vu_transport->lock);
 			return -EEXIST;
 		}
 	}
+	pthread_mutex_unlock(&vu_transport->lock);
 
 	endpoint = calloc(1, sizeof(*endpoint));
 	if (!endpoint) {
 		return -ENOMEM;
 	}
 
+	pthread_mutex_init(&endpoint->lock, NULL);
 	endpoint->devmem_fd = -1;
 	memcpy(&endpoint->trid, trid, sizeof(endpoint->trid));
 
-	err = asprintf(&path, "%s/bar0", endpoint_id(endpoint));
-	if (err == -1) {
+	ret = snprintf(path, PATH_MAX, "%s/bar0", endpoint_id(endpoint));
+	if (ret < 0 || ret >= PATH_MAX) {
+		SPDK_ERRLOG("%s: error to get socket path: %s.\n", endpoint_id(endpoint), spdk_strerror(errno));
+		ret = -1;
 		goto out;
 	}
 
-	fd = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-	if (fd == -1) {
-		SPDK_ERRLOG("%s: failed to open device memory at %s: %m\n",
-			    endpoint_id(endpoint), path);
-		err = fd;
-		free(path);
+	ret = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	if (ret == -1) {
+		SPDK_ERRLOG("%s: failed to open device memory at %s: %s.\n",
+			    endpoint_id(endpoint), path, spdk_strerror(errno));
 		goto out;
 	}
-	free(path);
 
-	endpoint->devmem_fd = fd;
-	err = ftruncate(fd, NVMF_VFIO_USER_DOORBELLS_OFFSET + NVMF_VFIO_USER_DOORBELLS_SIZE);
-	if (err != 0) {
+	endpoint->devmem_fd = ret;
+	ret = ftruncate(endpoint->devmem_fd,
+			NVME_DOORBELLS_OFFSET + NVMF_VFIO_USER_DOORBELLS_SIZE);
+	if (ret != 0) {
+		SPDK_ERRLOG("%s: error to ftruncate file %s: %s.\n", endpoint_id(endpoint), path,
+			    spdk_strerror(errno));
 		goto out;
 	}
 
 	endpoint->doorbells = mmap(NULL, NVMF_VFIO_USER_DOORBELLS_SIZE,
-				   PROT_READ | PROT_WRITE, MAP_SHARED, fd, NVMF_VFIO_USER_DOORBELLS_OFFSET);
+				   PROT_READ | PROT_WRITE, MAP_SHARED, endpoint->devmem_fd, NVME_DOORBELLS_OFFSET);
 	if (endpoint->doorbells == MAP_FAILED) {
+		SPDK_ERRLOG("%s: error to mmap file %s: %s.\n", endpoint_id(endpoint), path, spdk_strerror(errno));
 		endpoint->doorbells = NULL;
-		err = -errno;
+		ret = -1;
 		goto out;
 	}
 
-	snprintf(uuid, PATH_MAX, "%s/cntrl", endpoint_id(endpoint));
-
+	ret = snprintf(uuid, PATH_MAX, "%s/cntrl", endpoint_id(endpoint));
+	if (ret < 0 || ret >= PATH_MAX) {
+		SPDK_ERRLOG("%s: error to get ctrlr file path: %s\n", endpoint_id(endpoint), spdk_strerror(errno));
+		ret = -1;
+		goto out;
+	}
 	endpoint->vfu_ctx = vfu_create_ctx(VFU_TRANS_SOCK, uuid, LIBVFIO_USER_FLAG_ATTACH_NB,
 					   endpoint, VFU_DEV_TYPE_PCI);
 	if (endpoint->vfu_ctx == NULL) {
 		SPDK_ERRLOG("%s: error creating libmuser context: %m\n",
 			    endpoint_id(endpoint));
-		err = -1;
+		ret = -1;
 		goto out;
 	}
 	vfu_setup_log(endpoint->vfu_ctx, vfio_user_log, vfio_user_get_log_level());
 
-	err = vfio_user_dev_info_fill(vu_transport, endpoint);
-	if (err < 0) {
+	ret = vfio_user_dev_info_fill(vu_transport, endpoint);
+	if (ret < 0) {
 		goto out;
 	}
 
-	pthread_mutex_init(&endpoint->lock, NULL);
 	TAILQ_INSERT_TAIL(&vu_transport->endpoints, endpoint, link);
 	SPDK_DEBUGLOG(nvmf_vfio, "%s: doorbells %p\n", uuid, endpoint->doorbells);
 
 out:
-	if (err != 0) {
+	if (ret != 0) {
 		nvmf_vfio_user_destroy_endpoint(endpoint);
 	}
 
-	return err;
+	return ret;
 }
 
 static void
@@ -2167,6 +2185,11 @@ nvmf_vfio_user_cdata_init(struct spdk_nvmf_transport *transport,
 			  struct spdk_nvmf_subsystem *subsystem,
 			  struct spdk_nvmf_ctrlr_data *cdata)
 {
+	cdata->vid = SPDK_PCI_VID_NUTANIX;
+	cdata->ssvid = SPDK_PCI_VID_NUTANIX;
+	cdata->ieee[0] = 0x8d;
+	cdata->ieee[1] = 0x6b;
+	cdata->ieee[2] = 0x50;
 	memset(&cdata->sgls, 0, sizeof(struct spdk_nvme_cdata_sgls));
 	cdata->sgls.supported = SPDK_NVME_SGLS_SUPPORTED_DWORD_ALIGNED;
 	/* libvfio-user can only support 1 connection for now */
@@ -2303,10 +2326,21 @@ vfio_user_qpair_disconnect_cb(void *ctx)
 	if (TAILQ_EMPTY(&ctrlr->connected_qps)) {
 		endpoint->ctrlr = NULL;
 		free_ctrlr(ctrlr, false);
-		pthread_mutex_unlock(&endpoint->lock);
-		return;
 	}
 	pthread_mutex_unlock(&endpoint->lock);
+}
+
+static void
+_vfio_user_qpair_disconnect(void *ctx)
+{
+	struct nvmf_vfio_user_qpair *vu_qpair = ctx;
+	struct nvmf_vfio_user_ctrlr *vu_ctrlr;
+	struct nvmf_vfio_user_endpoint *endpoint;
+
+	vu_ctrlr = vu_qpair->ctrlr;
+	endpoint = vu_ctrlr->endpoint;
+
+	spdk_nvmf_qpair_disconnect(&vu_qpair->qpair, vfio_user_qpair_disconnect_cb, endpoint);
 }
 
 static int
@@ -2329,7 +2363,8 @@ vfio_user_destroy_ctrlr(struct nvmf_vfio_user_ctrlr *ctrlr)
 	}
 
 	TAILQ_FOREACH(qpair, &ctrlr->connected_qps, tailq) {
-		spdk_nvmf_qpair_disconnect(&qpair->qpair, vfio_user_qpair_disconnect_cb, endpoint);
+		/* add another round thread poll to avoid recursive endpoint lock */
+		spdk_thread_send_msg(ctrlr->thread, _vfio_user_qpair_disconnect, qpair);
 	}
 	pthread_mutex_unlock(&endpoint->lock);
 
@@ -2351,6 +2386,10 @@ vfio_user_poll_vfu_ctx(void *ctx)
 	 * to the portion of the BAR that is not mmap'd */
 	ret = vfu_run_ctx(ctrlr->endpoint->vfu_ctx);
 	if (spdk_unlikely(ret == -1)) {
+		if (errno == EBUSY) {
+			return SPDK_POLLER_BUSY;
+		}
+
 		spdk_poller_unregister(&ctrlr->vfu_ctx_poller);
 
 		/* initiator shutdown or reset, waiting for another re-connect */
@@ -2369,43 +2408,44 @@ static int
 handle_queue_connect_rsp(struct nvmf_vfio_user_req *req, void *cb_arg)
 {
 	struct nvmf_vfio_user_poll_group *vu_group;
-	struct nvmf_vfio_user_qpair *qpair = cb_arg;
-	struct nvmf_vfio_user_ctrlr *ctrlr;
+	struct nvmf_vfio_user_qpair *vu_qpair = cb_arg;
+	struct nvmf_vfio_user_ctrlr *vu_ctrlr;
 	struct nvmf_vfio_user_endpoint *endpoint;
 
-	assert(qpair != NULL);
+	assert(vu_qpair != NULL);
 	assert(req != NULL);
 
-	ctrlr = qpair->ctrlr;
-	endpoint = ctrlr->endpoint;
-	assert(ctrlr != NULL);
+	vu_ctrlr = vu_qpair->ctrlr;
+	assert(vu_ctrlr != NULL);
+	endpoint = vu_ctrlr->endpoint;
 	assert(endpoint != NULL);
 
 	if (spdk_nvme_cpl_is_error(&req->req.rsp->nvme_cpl)) {
 		SPDK_ERRLOG("SC %u, SCT %u\n", req->req.rsp->nvme_cpl.status.sc, req->req.rsp->nvme_cpl.status.sct);
 		endpoint->ctrlr = NULL;
-		free_ctrlr(ctrlr, true);
+		free_ctrlr(vu_ctrlr, true);
 		return -1;
 	}
 
-	vu_group = SPDK_CONTAINEROF(qpair->group, struct nvmf_vfio_user_poll_group, group);
-	TAILQ_INSERT_TAIL(&vu_group->qps, qpair, link);
-	qpair->state = VFIO_USER_QPAIR_ACTIVE;
+	vu_group = SPDK_CONTAINEROF(vu_qpair->group, struct nvmf_vfio_user_poll_group, group);
+	TAILQ_INSERT_TAIL(&vu_group->qps, vu_qpair, link);
+	vu_qpair->state = VFIO_USER_QPAIR_ACTIVE;
 
 	pthread_mutex_lock(&endpoint->lock);
-	if (nvmf_qpair_is_admin_queue(&qpair->qpair)) {
-		ctrlr->cntlid = qpair->qpair.ctrlr->cntlid;
-		ctrlr->thread = spdk_get_thread();
-		ctrlr->vfu_ctx_poller = SPDK_POLLER_REGISTER(vfio_user_poll_vfu_ctx, ctrlr, 0);
+	if (nvmf_qpair_is_admin_queue(&vu_qpair->qpair)) {
+		vu_ctrlr->cntlid = vu_qpair->qpair.ctrlr->cntlid;
+		vu_ctrlr->thread = spdk_get_thread();
+		vu_ctrlr->ctrlr = vu_qpair->qpair.ctrlr;
+		vu_ctrlr->vfu_ctx_poller = SPDK_POLLER_REGISTER(vfio_user_poll_vfu_ctx, vu_ctrlr, 0);
 	} else {
 		/* For I/O queues this command was generated in response to an
 		 * ADMIN I/O CREATE SUBMISSION QUEUE command which has not yet
 		 * been completed. Complete it now.
 		 */
-		post_completion(ctrlr, &ctrlr->qp[0]->cq, 0, 0,
-				qpair->create_io_sq_cmd.cid, SPDK_NVME_SC_SUCCESS, SPDK_NVME_SCT_GENERIC);
+		post_completion(vu_ctrlr, &vu_ctrlr->qp[0]->cq, 0, 0,
+				vu_qpair->create_io_sq_cmd.cid, SPDK_NVME_SC_SUCCESS, SPDK_NVME_SCT_GENERIC);
 	}
-	TAILQ_INSERT_TAIL(&ctrlr->connected_qps, qpair, tailq);
+	TAILQ_INSERT_TAIL(&vu_ctrlr->connected_qps, vu_qpair, tailq);
 	pthread_mutex_unlock(&endpoint->lock);
 
 	free(req->req.data);
@@ -2481,13 +2521,9 @@ nvmf_vfio_user_poll_group_remove(struct spdk_nvmf_transport_poll_group *group,
 				 struct spdk_nvmf_qpair *qpair)
 {
 	struct nvmf_vfio_user_qpair *vu_qpair;
-	struct nvmf_vfio_user_ctrlr *vu_ctrlr;
-	struct nvmf_vfio_user_endpoint *endpoint;
 	struct nvmf_vfio_user_poll_group *vu_group;
 
 	vu_qpair = SPDK_CONTAINEROF(qpair, struct nvmf_vfio_user_qpair, qpair);
-	vu_ctrlr = vu_qpair->ctrlr;
-	endpoint = vu_ctrlr->endpoint;
 
 	SPDK_DEBUGLOG(nvmf_vfio,
 		      "%s: remove NVMf QP%d=%p from NVMf poll_group=%p\n",
@@ -2496,10 +2532,6 @@ nvmf_vfio_user_poll_group_remove(struct spdk_nvmf_transport_poll_group *group,
 
 	vu_group = SPDK_CONTAINEROF(group, struct nvmf_vfio_user_poll_group, group);
 	TAILQ_REMOVE(&vu_group->qps, vu_qpair, link);
-
-	pthread_mutex_lock(&endpoint->lock);
-	TAILQ_REMOVE(&vu_ctrlr->connected_qps, vu_qpair, tailq);
-	pthread_mutex_unlock(&endpoint->lock);
 
 	return 0;
 }
@@ -2558,10 +2590,17 @@ nvmf_vfio_user_close_qpair(struct spdk_nvmf_qpair *qpair,
 			   spdk_nvmf_transport_qpair_fini_cb cb_fn, void *cb_arg)
 {
 	struct nvmf_vfio_user_qpair *vu_qpair;
+	struct nvmf_vfio_user_ctrlr *vu_ctrlr;
 
 	assert(qpair != NULL);
 	vu_qpair = SPDK_CONTAINEROF(qpair, struct nvmf_vfio_user_qpair, qpair);
-	free_qp(vu_qpair->ctrlr, qpair->qid);
+	vu_ctrlr = vu_qpair->ctrlr;
+
+	pthread_mutex_lock(&vu_ctrlr->endpoint->lock);
+	TAILQ_REMOVE(&vu_ctrlr->connected_qps, vu_qpair, tailq);
+	pthread_mutex_unlock(&vu_ctrlr->endpoint->lock);
+
+	free_qp(vu_ctrlr, qpair->qid);
 
 	if (cb_fn) {
 		cb_fn(cb_arg);

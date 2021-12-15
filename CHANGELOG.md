@@ -2,10 +2,20 @@
 
 ## v22.01: (Upcoming Release)
 
+### accel
+
+The batching capability was removed. Batching is now considered an implementation
+detail of the low level drivers.
+
 ### nvme
 
 API `spdk_nvme_trtype_is_fabrics` was added to return existing transport type
 is fabric or not.
+
+### bdev_nvme
+
+Added `num_io_queues` to `bdev_nvme_attach_controller` RPC to allow specifying amount
+of requested IO queues.
 
 ### bdev
 
@@ -13,6 +23,13 @@ The parameter `retry_count` of the RPC `bdev_nvme_set_options` was deprecated an
 removed in SPDK 22.04, and the parameter `transport_retry_count` is added and used instead.
 
 An new parameter `bdev_retry_count` is added to the RPC `bdev_nvme_set_options`.
+
+### nvme
+
+New APIs, `spdk_nvme_ctrlr_disconnect`, `spdk_nvme_ctrlr_reconnect_async`, and
+`spdk_nvme_ctrlr_reconnect_poll_async`, have been added to improve error recovery, and
+the existing APIs,`spdk_nvme_ctrlr_reset_async` and `spdk_nvme_ctrlr_reset_poll_async`
+were deprecated.
 
 ## v21.10
 

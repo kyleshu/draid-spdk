@@ -1310,6 +1310,7 @@ Example response:
         "timed_pollers": [
           {
             "name": "spdk_rpc_subsystem_poll",
+            "id": 1,
             "state": "waiting",
             "run_count": 12345,
             "busy_count": 10000,
@@ -2495,6 +2496,7 @@ name                    | Optional | string      | Bdev name to use
 block_size              | Required | number      | Block size in bytes -must be multiple of 512
 num_blocks              | Required | number      | Number of blocks
 uuid                    | Optional | string      | UUID of new bdev
+optimal_io_boundary     | Optional | number      | Split on optimal IO boundary, in number of blocks, default 0
 
 #### Result
 
@@ -2510,7 +2512,8 @@ Example request:
     "block_size": 4096,
     "num_blocks": 16384,
     "name": "Malloc0",
-    "uuid": "2b6601ba-eada-44fb-9a83-a20eb9eb9e90"
+    "uuid": "2b6601ba-eada-44fb-9a83-a20eb9eb9e90",
+    "optimal_io_boundary": 16
   },
   "jsonrpc": "2.0",
   "method": "bdev_malloc_create",
@@ -2895,6 +2898,7 @@ hdgst                      | Optional | bool        | Enable TCP header digest
 ddgst                      | Optional | bool        | Enable TCP data digest
 fabrics_connect_timeout_us | Optional | bool        | Timeout for fabrics connect (in microseconds)
 multipath                  | Optional | string      | Multipathing behavior: disable, failover, multipath. Default is failover.
+num_io_queues              | Optional | uint32_t    | The number of IO queues to request during initialization. Range: (0, UINT16_MAX + 1], Default is 1024.
 
 #### Example
 
@@ -8470,7 +8474,7 @@ Example response:
 
 Request notifications. Returns array of notifications that happend since the specified id (or first that is available).
 
-Notice: Notifications are kept in circular buffer with limited size. Older notifications might be inaccesible
+Notice: Notifications are kept in circular buffer with limited size. Older notifications might be inaccessible
 due to being overwritten by new ones.
 
 #### Parameters

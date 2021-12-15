@@ -45,7 +45,7 @@ if [ $(uname -s) = Linux ]; then
 	fi
 fi
 
-trap "process_core || :; autotest_cleanup; exit 1" SIGINT SIGTERM EXIT
+trap "autotest_cleanup || :; revert_soft_roce; exit 1" SIGINT SIGTERM EXIT
 
 timing_enter autotest
 
@@ -87,10 +87,23 @@ rm -f /var/tmp/spdk*.sock
 # Load the kernel driver
 ./scripts/setup.sh reset
 
+get_zoned_devs
+
+if ((${#zoned_devs[@]} > 0)); then
+	# FIXME: For now make sure zoned devices are tested on-demand by
+	# a designated tests instead of falling into any other. The main
+	# concern here are fio workloads where specific configuration
+	# must be in place for it to work with the zoned device.
+	export PCI_BLOCKED="${zoned_devs[*]}"
+	export PCI_ZONED="${zoned_devs[*]}"
+fi
+
 # Delete all leftover lvols and gpt partitions
 # Matches both /dev/nvmeXnY on Linux and /dev/nvmeXnsY on BSD
 # Filter out nvme with partitions - the "p*" suffix
 for dev in $(ls /dev/nvme*n* | grep -v p || true); do
+	# Skip zoned devices as non-sequential IO will always fail
+	[[ -z ${zoned_devs["${dev##*/}"]} ]] || continue
 	if ! block_in_use "$dev"; then
 		dd if=/dev/zero of="$dev" bs=1M count=1
 	fi
@@ -99,38 +112,6 @@ done
 sync
 
 if [ $(uname -s) = Linux ]; then
-	# OCSSD devices drivers don't support IO issues by kernel so
-	# detect OCSSD devices and block them (unbind from any driver).
-	# If test scripts want to use this device it needs to do this explicitly.
-	#
-	# If some OCSSD device is bound to other driver than nvme we won't be able to
-	# discover if it is OCSSD or not so load the kernel driver first.
-
-	while IFS= read -r -d '' dev; do
-		# Send Open Channel 2.0 Geometry opcode "0xe2" - not supported by NVMe device.
-		if nvme admin-passthru $dev --namespace-id=1 --data-len=4096 --opcode=0xe2 --read > /dev/null; then
-			bdf="$(basename $(readlink -e /sys/class/nvme/${dev#/dev/}/device))"
-			echo "INFO: blocking OCSSD device: $dev ($bdf)"
-			PCI_BLOCKED+=" $bdf"
-			OCSSD_PCI_DEVICES+=" $bdf"
-		fi
-	done < <(find /dev -maxdepth 1 -regex '/dev/nvme[0-9]+' -print0)
-
-	export OCSSD_PCI_DEVICES
-
-	# Now, bind blocked devices to pci-stub module. This will prevent
-	# automatic grabbing these devices when we add device/vendor ID to
-	# proper driver.
-	if [[ -n "$PCI_BLOCKED" ]]; then
-		# shellcheck disable=SC2097,SC2098
-		PCI_ALLOWED="$PCI_BLOCKED" \
-			PCI_BLOCKED="" \
-			DRIVER_OVERRIDE="pci-stub" \
-			./scripts/setup.sh
-
-		# Export our blocked list so it will take effect during next setup.sh
-		export PCI_BLOCKED
-	fi
 	run_test "setup.sh" "$rootdir/test/setup/test-setup.sh"
 fi
 
@@ -174,6 +155,7 @@ if [ $SPDK_RUN_FUNCTIONAL_TEST -eq 1 ]; then
 	run_test "rpc" test/rpc/rpc.sh
 	run_test "rpc_client" test/rpc_client/rpc_client.sh
 	run_test "json_config" ./test/json_config/json_config.sh
+	run_test "json_config_extra_key" ./test/json_config/json_config_extra_key.sh
 	run_test "alias_rpc" test/json_config/alias_rpc/alias_rpc.sh
 	run_test "spdkcli_tcp" test/spdkcli/tcp.sh
 	run_test "dpdk_mem_utility" test/dpdk_memory_utility/test_dpdk_mem_info.sh
@@ -204,10 +186,6 @@ if [ $SPDK_RUN_FUNCTIONAL_TEST -eq 1 ]; then
 		fi
 	fi
 
-	if [ $SPDK_TEST_JSON -eq 1 ]; then
-		run_test "test_converter" test/config_converter/test_converter.sh
-	fi
-
 	if [ $SPDK_TEST_NVME -eq 1 ]; then
 		run_test "blockdev_nvme" test/bdev/blockdev.sh "nvme"
 		if [[ $(uname -s) == Linux ]]; then
@@ -229,6 +207,11 @@ if [ $SPDK_RUN_FUNCTIONAL_TEST -eq 1 ]; then
 		if [[ $SPDK_TEST_NVME_CMB -eq 1 ]]; then
 			run_test "nvme_cmb" test/nvme/cmb/cmb.sh
 		fi
+
+		if [[ $SPDK_TEST_NVME_ZNS -eq 1 ]]; then
+			run_test "nvme_zns" test/nvme/zns/zns.sh
+		fi
+
 		run_test "nvme_rpc" test/nvme/nvme_rpc.sh
 		# Only test hotplug without ASAN enabled. Since if it is
 		# enabled, it catches SEGV earlier than our handler which
@@ -274,8 +257,10 @@ if [ $SPDK_RUN_FUNCTIONAL_TEST -eq 1 ]; then
 			tcp_device_init
 			timing_exit tcp_setup
 			run_test "nvmf_tcp" ./test/nvmf/nvmf.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
-			run_test "spdkcli_nvmf_tcp" ./test/spdkcli/nvmf.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
-			run_test "nvmf_identify_passthru" test/nvmf/target/identify_passthru.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
+			if [[ $SPDK_TEST_URING -eq 0 ]]; then
+				run_test "spdkcli_nvmf_tcp" ./test/spdkcli/nvmf.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
+				run_test "nvmf_identify_passthru" test/nvmf/target/identify_passthru.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
+			fi
 			run_test "nvmf_dif" test/nvmf/target/dif.sh
 		elif [ "$SPDK_TEST_NVMF_TRANSPORT" = "fc" ]; then
 			run_test "nvmf_fc" ./test/nvmf/nvmf.sh --transport=$SPDK_TEST_NVMF_TRANSPORT
@@ -351,15 +336,13 @@ fi
 
 timing_enter cleanup
 autotest_cleanup
+revert_soft_roce
 timing_exit cleanup
 
 timing_exit autotest
 chmod a+r $output_dir/timing.txt
 
 trap - SIGINT SIGTERM EXIT
-
-# catch any stray core files
-process_core
 
 [[ -f "$output_dir/udev.log" ]] && rm -f "$output_dir/udev.log"
 

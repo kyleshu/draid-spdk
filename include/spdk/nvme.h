@@ -277,7 +277,7 @@ struct spdk_nvme_ctrlr_opts {
 typedef void (*spdk_nvme_accel_completion_cb)(void *cb_arg, int status);
 
 /**
- * Function table for the NVMe acccelerator device.
+ * Function table for the NVMe accelerator device.
  *
  * This table provides a set of APIs to allow user to leverage
  * accelerator functions.
@@ -436,7 +436,7 @@ struct spdk_nvme_transport_id {
 
 	/**
 	 * Transport service id of the NVMe-oF endpoint.  For transports which use
-	 * IP addressing (e.g. RDMA), this field shoud be the port number. For PCIe,
+	 * IP addressing (e.g. RDMA), this field should be the port number. For PCIe,
 	 * and FC this is always a zero length string.
 	 */
 	char trsvcid[SPDK_NVMF_TRSVCID_MAX_LEN + 1];
@@ -553,7 +553,7 @@ struct spdk_nvme_ns_cmd_ext_io_opts {
 	/** size of this structure in bytes */
 	size_t size;
 	/** Memory domain which describes data payload in IO request. The controller must support
-	 * the corresponding memory domain type, refer to \ref spdk_nvme_ctrlr_get_memory_domain */
+	 * the corresponding memory domain type, refer to \ref spdk_nvme_ctrlr_get_memory_domains */
 	struct spdk_memory_domain *memory_domain;
 	/** User context to be passed to memory domain operations */
 	void *memory_domain_ctx;
@@ -629,7 +629,7 @@ void spdk_nvme_trid_populate_transport(struct spdk_nvme_transport_id *trid,
 int spdk_nvme_host_id_parse(struct spdk_nvme_host_id *hostid, const char *str);
 
 /**
- * Parse the string representation of a transport ID tranport type into the trid struct.
+ * Parse the string representation of a transport ID transport type into the trid struct.
  *
  * \param trid The trid to write to
  * \param trstring Input string representation of transport type (e.g. "PCIe", "RDMA").
@@ -641,7 +641,7 @@ int spdk_nvme_transport_id_populate_trstring(struct spdk_nvme_transport_id *trid
 		const char *trstring);
 
 /**
- * Parse the string representation of a transport ID tranport type.
+ * Parse the string representation of a transport ID transport type.
  *
  * \param trtype Output transport type (allocated by caller).
  * \param str Input string representation of transport type (e.g. "PCIe", "RDMA").
@@ -665,12 +665,12 @@ const char *spdk_nvme_transport_id_trtype_str(enum spdk_nvme_transport_type trty
  *
  * \param adrfam Address family to convert.
  *
- * \return static string constant describing adrfam, or NULL if adrmfam not found.
+ * \return static string constant describing adrfam, or NULL if adrfam not found.
  */
 const char *spdk_nvme_transport_id_adrfam_str(enum spdk_nvmf_adrfam adrfam);
 
 /**
- * Parse the string representation of a tranport ID address family.
+ * Parse the string representation of a transport ID address family.
  *
  * \param adrfam Output address family (allocated by caller).
  * \param str Input string representation of address family (e.g. "IPv4", "IPv6").
@@ -931,7 +931,7 @@ struct spdk_nvme_probe_ctx *spdk_nvme_probe_async(const struct spdk_nvme_transpo
 		spdk_nvme_remove_cb remove_cb);
 
 /**
- * Proceed with attaching contollers associated with the probe context.
+ * Proceed with attaching controllers associated with the probe context.
  *
  * The probe context is one returned from a previous call to
  * spdk_nvme_probe_async().  Users must call this function on the
@@ -1079,6 +1079,8 @@ struct spdk_nvme_ctrlr_reset_ctx;
 
 /**
  * Create a context object that can be polled to perform a full hardware reset of the NVMe controller.
+ * (Deprecated, please use spdk_nvme_ctrlr_disconnect(), spdk_nvme_ctrlr_reconnect_async(), and
+ * spdk_nvme_ctrlr_reconnect_poll_async() instead.)
  *
  * The function will set the controller reset context on success, user must call
  * spdk_nvme_ctrlr_reset_poll_async() until it returns a value other than -EAGAIN.
@@ -1096,7 +1098,9 @@ int spdk_nvme_ctrlr_reset_async(struct spdk_nvme_ctrlr *ctrlr,
 				struct spdk_nvme_ctrlr_reset_ctx **reset_ctx);
 
 /**
- * Proceed with resetting contoller associated with the controller reset context.
+ * Proceed with resetting controller associated with the controller reset context.
+ * (Deprecated, please use spdk_nvme_ctrlr_disconnect(), spdk_nvme_ctrlr_reconnect_async(), and
+ * spdk_nvme_ctrlr_reconnect_poll_async() instead.)
  *
  * The controller reset context is one returned from a previous call to
  * spdk_nvme_ctrlr_reset_async().  Users must call this function on the
@@ -1110,6 +1114,37 @@ int spdk_nvme_ctrlr_reset_async(struct spdk_nvme_ctrlr *ctrlr,
  * spdk_nvme_ctrlr_reset_poll_async again to continue progress.
  */
 int spdk_nvme_ctrlr_reset_poll_async(struct spdk_nvme_ctrlr_reset_ctx *ctrlr_reset_ctx);
+
+/**
+ * Disconnect the given NVMe controller.
+ *
+ * This function is used as the first operation of a full reset sequence of the given NVMe
+ * controller. The NVMe controller is ready to reconnect after completing this function.
+ *
+ * \param ctrlr Opaque handle to NVMe controller.
+ *
+ * \return 0 on success, -EBUSY if controller is already resetting, or -ENXIO if controller
+ * has been removed.
+ */
+int spdk_nvme_ctrlr_disconnect(struct spdk_nvme_ctrlr *ctrlr);
+
+/**
+ * Start re-enabling the given NVMe controller in a full reset sequence
+ *
+ * \param ctrlr Opaque handle to NVMe controller.
+ */
+void spdk_nvme_ctrlr_reconnect_async(struct spdk_nvme_ctrlr *ctrlr);
+
+/**
+ * Proceed with re-enabling the given NVMe controller.
+ *
+ * Users must call this function in a full reset sequence until it returns a value other
+ * than -EAGAIN.
+ *
+ * \return 0 if the given NVMe controller is enabled, or -EBUSY if there are still
+ * pending operations to enable it.
+ */
+int spdk_nvme_ctrlr_reconnect_poll_async(struct spdk_nvme_ctrlr *ctrlr);
 
 /**
  * Perform a NVMe subsystem reset.
@@ -1404,7 +1439,7 @@ struct spdk_nvme_qpair;
  * Fatal Status field to 1, then reset is required to recover from such error.
  * Users may detect Controller Fatal Status when timeout happens.
  *
- * \param cb_arg Argument passed to callback funciton.
+ * \param cb_arg Argument passed to callback function.
  * \param ctrlr Opaque handle to NVMe controller.
  * \param qpair Opaque handle to a queue pair.
  * \param cid Command ID.
@@ -1522,7 +1557,7 @@ struct spdk_nvme_io_qpair_opts {
 	 * This flag if set to true enables the creation of submission and completion queue
 	 * asynchronously. This mode is currently supported at PCIe layer and tracks the
 	 * qpair creation with state machine and returns to the user.Default mode is set to
-	 * false to create io qpair synchronosuly.
+	 * false to create io qpair synchronously.
 	 */
 	bool async_mode;
 };
@@ -1659,7 +1694,7 @@ int spdk_nvme_ctrlr_free_io_qpair(struct spdk_nvme_qpair *qpair);
  *
  * The driver sets the CID.  EVERYTHING else is assumed set by the caller.
  * Needless to say, this is potentially extremely dangerous for both the host
- * (accidental/malicionus storage usage/corruption), and the device.
+ * (accidental/malicious storage usage/corruption), and the device.
  * Thus its intent is for very specific hardware testing and environment
  * reproduction.
  *

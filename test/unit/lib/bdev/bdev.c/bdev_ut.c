@@ -967,6 +967,20 @@ bdev_io_types_test(void)
 	ut_enable_io_type(SPDK_BDEV_IO_TYPE_WRITE_ZEROES, true);
 	ut_enable_io_type(SPDK_BDEV_IO_TYPE_WRITE, true);
 
+	/* NVME_IO, NVME_IO_MD and NVME_ADMIN are not supported */
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_IO, false);
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_IO_MD, false);
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_ADMIN, false);
+	rc = spdk_bdev_nvme_io_passthru(desc, io_ch, NULL, NULL, 0, NULL, NULL);
+	CU_ASSERT(rc == -ENOTSUP);
+	rc = spdk_bdev_nvme_io_passthru_md(desc, io_ch, NULL, NULL, 0, NULL, 0, NULL, NULL);
+	CU_ASSERT(rc == -ENOTSUP);
+	rc = spdk_bdev_nvme_admin_passthru(desc, io_ch, NULL, NULL, 0, NULL, NULL);
+	CU_ASSERT(rc == -ENOTSUP);
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_IO, true);
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_IO_MD, true);
+	ut_enable_io_type(SPDK_BDEV_IO_TYPE_NVME_ADMIN, true);
+
 	spdk_put_io_channel(io_ch);
 	spdk_bdev_close(desc);
 	free_bdev(bdev);
@@ -1650,7 +1664,7 @@ bdev_io_boundary_split_test(void)
 	CU_ASSERT(g_io_done == true);
 	CU_ASSERT(g_io_status == SPDK_BDEV_IO_STATUS_FAILED);
 
-	/* Test if a multi vector command terminated with failure before continueing
+	/* Test if a multi vector command terminated with failure before continuing
 	 * splitting process when one of child I/O failed.
 	 * The multi vector command is as same as the above that needs to be split by strip
 	 * and then needs to be split further due to the capacity of child iovs.
@@ -1732,7 +1746,7 @@ bdev_io_boundary_split_test(void)
 	ut_expected_io_set_iov(expected_io, 0,
 			       (void *)(iov[BDEV_IO_NUM_CHILD_IOV - 2].iov_base + 0x1e4), 0x2e);
 
-	/* position 31 picked the the rest of the trasnfer to get us to 0x4200 */
+	/* position 31 picked the the rest of the transfer to get us to 0x4200 */
 	ut_expected_io_set_iov(expected_io, 1,
 			       (void *)(iov[BDEV_IO_NUM_CHILD_IOV - 1].iov_base), 0x1d2);
 	TAILQ_INSERT_TAIL(&g_bdev_ut_channel->expected_io, expected_io, link);
@@ -2455,7 +2469,7 @@ bdev_io_mix_split_test(void)
 	 */
 
 	/* The first 2 IOs are in an IO boundary.
-	 * After splitting segmemt size the segment num exceeds.
+	 * After splitting segment size the segment num exceeds.
 	 * So it splits to 2 child IOs.
 	 */
 	expected_io = ut_alloc_expected_io(SPDK_BDEV_IO_TYPE_WRITE, 0, 14, 6);

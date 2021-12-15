@@ -1448,7 +1448,7 @@ iscsi_op_login_check_target(struct spdk_iscsi_conn *conn,
 		return SPDK_ISCSI_LOGIN_ERROR_RESPONSE;
 	}
 	if (iscsi_tgt_node_is_redirected(conn, *target, buf, MAX_TMPBUF)) {
-		SPDK_INFOLOG(iscsi, "target %s is redirectd\n", target_name);
+		SPDK_INFOLOG(iscsi, "target %s is redirected\n", target_name);
 		rsp_pdu->data_segment_len = iscsi_append_text("TargetAddress",
 					    buf,
 					    rsp_pdu->data,
@@ -3290,20 +3290,13 @@ iscsi_pdu_payload_op_scsi_write(struct spdk_iscsi_conn *conn, struct spdk_iscsi_
 	struct spdk_iscsi_pdu *pdu;
 	struct iscsi_bhs_scsi_req *reqh;
 	uint32_t transfer_len;
-	uint32_t scsi_data_len;
-	struct spdk_iscsi_task *subtask;
+	struct spdk_mobj *mobj;
 	int rc;
 
 	pdu = iscsi_task_get_pdu(task);
 	reqh = (struct iscsi_bhs_scsi_req *)&pdu->bhs;
 
 	transfer_len = task->scsi.transfer_len;
-
-	if (spdk_likely(!pdu->dif_insert_or_strip)) {
-		scsi_data_len = pdu->data_segment_len;
-	} else {
-		scsi_data_len = pdu->data_buf_len;
-	}
 
 	if (reqh->final_bit &&
 	    pdu->data_segment_len < transfer_len) {
@@ -3315,26 +3308,35 @@ iscsi_pdu_payload_op_scsi_write(struct spdk_iscsi_conn *conn, struct spdk_iscsi_
 			return SPDK_ISCSI_CONNECTION_FATAL;
 		}
 
-		/* Non-immediate writes */
+		/* immediate writes */
 		if (pdu->data_segment_len != 0) {
-			/* we are doing the first partial write task */
-			subtask = iscsi_task_get(conn, task, iscsi_task_cpl);
-			assert(subtask != NULL);
+			mobj = pdu->mobj[0];
+			assert(mobj != NULL);
 
-			spdk_scsi_task_set_data(&subtask->scsi, pdu->data, scsi_data_len);
-			subtask->scsi.length = pdu->data_segment_len;
-			iscsi_task_associate_pdu(subtask, pdu);
-
-			task->current_data_offset = pdu->data_segment_len;
-
-			iscsi_queue_task(conn, subtask);
+			if (!pdu->dif_insert_or_strip &&
+			    mobj->data_len < SPDK_ISCSI_MAX_RECV_DATA_SEGMENT_LENGTH) {
+				/* continue aggregation until the first data buffer is full. */
+				iscsi_task_set_mobj(task, mobj);
+				pdu->mobj[0] = NULL;
+			} else {
+				/* we are doing the first partial write task */
+				rc = iscsi_submit_write_subtask(conn, task, pdu, mobj);
+				if (rc < 0) {
+					iscsi_task_put(task);
+					return SPDK_ISCSI_CONNECTION_FATAL;
+				}
+			}
 		}
 		return 0;
 	}
 
 	if (pdu->data_segment_len == transfer_len) {
 		/* we are doing small writes with no R2T */
-		spdk_scsi_task_set_data(&task->scsi, pdu->data, scsi_data_len);
+		if (spdk_likely(!pdu->dif_insert_or_strip)) {
+			spdk_scsi_task_set_data(&task->scsi, pdu->data, pdu->data_segment_len);
+		} else {
+			spdk_scsi_task_set_data(&task->scsi, pdu->data, pdu->data_buf_len);
+		}
 		task->scsi.length = transfer_len;
 	}
 
@@ -3439,6 +3441,9 @@ iscsi_pdu_hdr_op_scsi(struct spdk_iscsi_conn *conn, struct spdk_iscsi_pdu *pdu)
 
 		if (spdk_unlikely(spdk_scsi_lun_get_dif_ctx(task->scsi.lun, &task->scsi, &pdu->dif_ctx))) {
 			pdu->dif_insert_or_strip = true;
+		} else if (reqh->final_bit && pdu->data_segment_len < transfer_len) {
+			pdu->data_buf_len = spdk_min(transfer_len,
+						     SPDK_ISCSI_MAX_RECV_DATA_SEGMENT_LENGTH);
 		}
 	} else {
 		/* neither R nor W bit set */
@@ -4286,10 +4291,10 @@ iscsi_pdu_hdr_op_data(struct spdk_iscsi_conn *conn, struct spdk_iscsi_pdu *pdu)
 
 	mobj = iscsi_task_get_mobj(task);
 	if (mobj == NULL) {
-		if (!F_bit && !pdu->dif_insert_or_strip) {
-			/* More Data-OUT PDUs will follow in this sequence. Increase the buffer
-			 * size up to SPDK_ISCSI_MAX_RECV_DATA_SEGMENT_LENGTH to merge them
-			 * into a single subtask.
+		if (!pdu->dif_insert_or_strip) {
+			/* More Data-OUT PDUs may follow. Increase the buffer size up to
+			 * SPDK_ISCSI_MAX_RECV_DATA_SEGMENT_LENGTH to merge them into a
+			 * single subtask.
 			 */
 			pdu->data_buf_len = spdk_min(task->desired_data_transfer_length,
 						     SPDK_ISCSI_MAX_RECV_DATA_SEGMENT_LENGTH);

@@ -91,6 +91,7 @@ struct spdk_poller {
 	uint64_t			next_run_tick;
 	uint64_t			run_count;
 	uint64_t			busy_count;
+	uint64_t			id;
 	spdk_poller_fn			fn;
 	void				*arg;
 	struct spdk_thread		*thread;
@@ -103,7 +104,7 @@ struct spdk_poller {
 };
 
 enum spdk_thread_state {
-	/* The thread is pocessing poller and message by spdk_thread_poll(). */
+	/* The thread is processing poller and message by spdk_thread_poll(). */
 	SPDK_THREAD_STATE_RUNNING,
 
 	/* The thread is in the process of termination. It reaps unregistering
@@ -142,6 +143,7 @@ struct spdk_thread {
 	size_t				msg_cache_count;
 	spdk_msg_fn			critical_msg;
 	uint64_t			id;
+	uint64_t			next_poller_id;
 	enum spdk_thread_state		state;
 	int				pending_unregister_count;
 
@@ -437,6 +439,11 @@ spdk_thread_create(const char *name, struct spdk_cpuset *cpumask)
 	thread->msg_cache_count = 0;
 
 	thread->tsc_last = spdk_get_ticks();
+
+	/* Monotonic increasing ID is set to each created poller beginning at 1. Once the
+	 * ID exceeds UINT64_MAX a warning message is logged
+	 */
+	thread->next_poller_id = 1;
 
 	thread->messages = spdk_ring_create(SPDK_RING_TYPE_MP_SC, 65536, SPDK_ENV_SOCKET_ID_ANY);
 	if (!thread->messages) {
@@ -1518,6 +1525,11 @@ poller_register(spdk_poller_fn fn,
 	poller->arg = arg;
 	poller->thread = thread;
 	poller->interruptfd = -1;
+	if (thread->next_poller_id == 0) {
+		SPDK_WARNLOG("Poller ID rolled over. Poller ID is duplicated.\n");
+		thread->next_poller_id = 1;
+	}
+	poller->id = thread->next_poller_id++;
 
 	poller->period_ticks = convert_us_to_ticks(period_microseconds);
 
@@ -1535,7 +1547,7 @@ poller_register(spdk_poller_fn fn,
 			spdk_poller_register_interrupt(poller, period_poller_set_interrupt_mode, NULL);
 		} else {
 			/* If the poller doesn't have a period, create interruptfd that's always
-			 * busy automatically when runnning in interrupt mode.
+			 * busy automatically when running in interrupt mode.
 			 */
 			rc = busy_poller_interrupt_init(poller);
 			if (rc > 0) {
@@ -1710,6 +1722,12 @@ const char *
 spdk_poller_get_name(struct spdk_poller *poller)
 {
 	return poller->name;
+}
+
+uint64_t
+spdk_poller_get_id(struct spdk_poller *poller)
+{
+	return poller->id;
 }
 
 const char *
@@ -2634,7 +2652,7 @@ spdk_interrupt_mode_enable(void)
 	 * g_spdk_msg_mempool will be valid if thread library is initialized.
 	 */
 	if (g_spdk_msg_mempool) {
-		SPDK_ERRLOG("Failed due to threading library is already initailzied.\n");
+		SPDK_ERRLOG("Failed due to threading library is already initialized.\n");
 		return -1;
 	}
 

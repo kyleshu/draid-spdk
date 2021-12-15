@@ -717,7 +717,35 @@ struct spdk_nvmf_tgt_add_transport_ctx {
 	struct spdk_nvmf_transport *transport;
 	spdk_nvmf_tgt_add_transport_done_fn cb_fn;
 	void *cb_arg;
+	int status;
 };
+
+static void
+_nvmf_tgt_remove_transport_done(struct spdk_io_channel_iter *i, int status)
+{
+	struct spdk_nvmf_tgt_add_transport_ctx *ctx = spdk_io_channel_iter_get_ctx(i);
+
+	ctx->cb_fn(ctx->cb_arg, ctx->status);
+	free(ctx);
+}
+
+static void
+_nvmf_tgt_remove_transport(struct spdk_io_channel_iter *i)
+{
+	struct spdk_nvmf_tgt_add_transport_ctx *ctx = spdk_io_channel_iter_get_ctx(i);
+	struct spdk_io_channel *ch = spdk_io_channel_iter_get_channel(i);
+	struct spdk_nvmf_poll_group *group = spdk_io_channel_get_ctx(ch);
+	struct spdk_nvmf_transport_poll_group *tgroup, *tmp;
+
+	TAILQ_FOREACH_SAFE(tgroup, &group->tgroups, link, tmp) {
+		if (tgroup->transport == ctx->transport) {
+			TAILQ_REMOVE(&group->tgroups, tgroup, link);
+			nvmf_transport_poll_group_destroy(tgroup);
+		}
+	}
+
+	spdk_for_each_channel_continue(i, 0);
+}
 
 static void
 _nvmf_tgt_add_transport_done(struct spdk_io_channel_iter *i, int status)
@@ -725,10 +753,17 @@ _nvmf_tgt_add_transport_done(struct spdk_io_channel_iter *i, int status)
 	struct spdk_nvmf_tgt_add_transport_ctx *ctx = spdk_io_channel_iter_get_ctx(i);
 
 	if (status) {
-		TAILQ_REMOVE(&ctx->tgt->transports, ctx->transport, link);
+		ctx->status = status;
+		spdk_for_each_channel(ctx->tgt,
+				      _nvmf_tgt_remove_transport,
+				      ctx,
+				      _nvmf_tgt_remove_transport_done);
+		return;
 	}
-	ctx->cb_fn(ctx->cb_arg, status);
 
+	ctx->transport->tgt = ctx->tgt;
+	TAILQ_INSERT_TAIL(&ctx->tgt->transports, ctx->transport, link);
+	ctx->cb_fn(ctx->cb_arg, status);
 	free(ctx);
 }
 
@@ -755,9 +790,6 @@ void spdk_nvmf_tgt_add_transport(struct spdk_nvmf_tgt *tgt,
 		cb_fn(cb_arg, -EEXIST);
 		return; /* transport already created */
 	}
-
-	transport->tgt = tgt;
-	TAILQ_INSERT_TAIL(&tgt->transports, transport, link);
 
 	ctx = calloc(1, sizeof(*ctx));
 	if (!ctx) {
@@ -918,7 +950,7 @@ spdk_nvmf_poll_group_add(struct spdk_nvmf_poll_group *group,
 		}
 	}
 
-	/* We add the qpair to the group only it is succesfully added into the tgroup */
+	/* We add the qpair to the group only it is successfully added into the tgroup */
 	if (rc == 0) {
 		SPDK_DTRACE_PROBE2(nvmf_poll_group_add_qpair, qpair, spdk_thread_get_id(group->thread));
 		TAILQ_INSERT_TAIL(&group->qpairs, qpair, link);
@@ -1521,11 +1553,6 @@ nvmf_poll_group_pause_subsystem(struct spdk_nvmf_poll_group *group,
 	}
 
 	sgroup = &group->sgroups[subsystem->id];
-	if (sgroup == NULL) {
-		rc = -1;
-		goto fini;
-	}
-
 	if (sgroup->state == SPDK_NVMF_SUBSYSTEM_PAUSED) {
 		goto fini;
 	}

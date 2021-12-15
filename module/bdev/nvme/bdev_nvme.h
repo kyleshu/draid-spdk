@@ -82,6 +82,7 @@ struct nvme_ns {
 struct nvme_bdev_io;
 struct nvme_bdev_ctrlr;
 struct nvme_bdev;
+struct nvme_io_path;
 
 struct nvme_path_id {
 	struct spdk_nvme_transport_id		trid;
@@ -103,7 +104,6 @@ struct nvme_ctrlr {
 	int					ref;
 
 	uint32_t				resetting : 1;
-	uint32_t				failover_in_progress : 1;
 	uint32_t				destruct : 1;
 	uint32_t				ana_log_page_updating : 1;
 	/**
@@ -121,7 +121,6 @@ struct nvme_ctrlr {
 
 	bdev_nvme_reset_cb			reset_cb_fn;
 	void					*reset_cb_arg;
-	struct spdk_nvme_ctrlr_reset_ctx	*reset_ctx;
 	/* Poller used to check for reset/detach completion */
 	struct spdk_poller			*reset_detach_poller;
 	struct spdk_nvme_detach_ctx		*detach_ctx;
@@ -164,6 +163,10 @@ struct nvme_ctrlr_channel {
 	struct nvme_poll_group		*group;
 	TAILQ_HEAD(, spdk_bdev_io)	pending_resets;
 	TAILQ_ENTRY(nvme_ctrlr_channel)	tailq;
+
+	/* The following is used to update io_path cache of nvme_bdev_channels. */
+	TAILQ_HEAD(, nvme_io_path)	io_path_list;
+
 };
 
 #define nvme_ctrlr_channel_get_ctrlr(ctrlr_ch)	\
@@ -173,9 +176,14 @@ struct nvme_io_path {
 	struct nvme_ns			*nvme_ns;
 	struct nvme_ctrlr_channel	*ctrlr_ch;
 	STAILQ_ENTRY(nvme_io_path)	stailq;
+
+	/* The following are used to update io_path cache of the nvme_bdev_channel. */
+	struct nvme_bdev_channel	*nbdev_ch;
+	TAILQ_ENTRY(nvme_io_path)	tailq;
 };
 
 struct nvme_bdev_channel {
+	struct nvme_io_path			*current_io_path;
 	STAILQ_HEAD(, nvme_io_path)		io_path_list;
 	TAILQ_HEAD(retry_io_head, spdk_bdev_io)	retry_io_list;
 	struct spdk_poller			*retry_io_poller;

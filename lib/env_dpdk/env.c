@@ -223,6 +223,13 @@ spdk_mempool_create_ctor(const char *name, size_t count,
 {
 	struct rte_mempool *mp;
 	size_t tmp;
+	unsigned dpdk_flags = 0;
+
+#if RTE_VERSION >= RTE_VERSION_NUM(21, 11, 0, 0)
+	dpdk_flags |= RTE_MEMPOOL_F_NO_IOVA_CONTIG;
+#else
+	dpdk_flags |= MEMPOOL_F_NO_IOVA_CONTIG;
+#endif
 
 	if (socket_id == SPDK_ENV_SOCKET_ID_ANY) {
 		socket_id = SOCKET_ID_ANY;
@@ -240,7 +247,7 @@ spdk_mempool_create_ctor(const char *name, size_t count,
 
 	mp = rte_mempool_create(name, count, ele_size, cache_size,
 				0, NULL, NULL, (rte_mempool_obj_cb_t *)obj_init, obj_init_arg,
-				socket_id, MEMPOOL_F_NO_IOVA_CONTIG);
+				socket_id, dpdk_flags);
 
 	return (struct spdk_mempool *)mp;
 }
@@ -346,8 +353,8 @@ void spdk_pause(void)
 void
 spdk_unaffinitize_thread(void)
 {
-	rte_cpuset_t new_cpuset, orig_cpuset;
-	long num_cores, i, orig_num_cores;
+	rte_cpuset_t new_cpuset;
+	long num_cores, i;
 
 	CPU_ZERO(&new_cpuset);
 
@@ -356,16 +363,6 @@ spdk_unaffinitize_thread(void)
 	/* Create a mask containing all CPUs */
 	for (i = 0; i < num_cores; i++) {
 		CPU_SET(i, &new_cpuset);
-	}
-
-	rte_thread_get_affinity(&orig_cpuset);
-	orig_num_cores = CPU_COUNT(&orig_cpuset);
-	if (orig_num_cores < num_cores) {
-		for (i = 0; i < orig_num_cores; i++) {
-			if (CPU_ISSET(i, &orig_cpuset)) {
-				CPU_CLR(i, &new_cpuset);
-			}
-		}
 	}
 
 	rte_thread_set_affinity(&new_cpuset);

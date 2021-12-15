@@ -1307,7 +1307,8 @@ _nvme_rdma_ctrlr_connect_qpair(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_q
 	}
 	SPDK_DEBUGLOG(nvme, "RDMA responses registered\n");
 
-	rqpair->mr_map = spdk_rdma_create_mem_map(rqpair->rdma_qp->qp->pd, &g_nvme_hooks);
+	rqpair->mr_map = spdk_rdma_create_mem_map(rqpair->rdma_qp->qp->pd, &g_nvme_hooks,
+			 SPDK_RDMA_MEMORY_MAP_ROLE_INITIATOR);
 	if (!rqpair->mr_map) {
 		SPDK_ERRLOG("Unable to register RDMA memory translation map\n");
 		return -1;
@@ -1852,7 +1853,7 @@ nvme_rdma_ctrlr_delete_io_qpair(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_
 
 	assert(qpair != NULL);
 	rqpair = nvme_rdma_qpair(qpair);
-	nvme_transport_ctrlr_disconnect_qpair(ctrlr, qpair);
+
 	if (rqpair->defer_deletion_to_pg) {
 		nvme_qpair_set_state(qpair, NVME_QPAIR_DESTROYING);
 		return 0;
@@ -1952,7 +1953,7 @@ static struct spdk_nvme_ctrlr *nvme_rdma_ctrlr_construct(const struct spdk_nvme_
 	STAILQ_INIT(&rctrlr->free_cm_events);
 	rctrlr->cm_events = nvme_rdma_calloc(NVME_RDMA_NUM_CM_EVENTS, sizeof(*rctrlr->cm_events));
 	if (rctrlr->cm_events == NULL) {
-		SPDK_ERRLOG("unable to allocat buffers to hold CM events.\n");
+		SPDK_ERRLOG("unable to allocate buffers to hold CM events.\n");
 		goto destruct_ctrlr;
 	}
 

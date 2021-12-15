@@ -235,7 +235,7 @@ struct nvme_payload {
 	spdk_nvme_req_next_sge_cb next_sge_fn;
 
 	/**
-	 * Exended IO options passed by the user
+	 * Extended IO options passed by the user
 	 */
 	struct spdk_nvme_ns_cmd_ext_io_opts *opts;
 	/**
@@ -654,6 +654,26 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_WAIT_FOR_IDENTIFY,
 
 	/**
+	 * Configure AER of the controller.
+	 */
+	NVME_CTRLR_STATE_CONFIGURE_AER,
+
+	/**
+	 * Waiting for the Configure AER to be completed.
+	 */
+	NVME_CTRLR_STATE_WAIT_FOR_CONFIGURE_AER,
+
+	/**
+	 * Set Keep Alive Timeout of the controller.
+	 */
+	NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT,
+
+	/**
+	 * Waiting for Set Keep Alive Timeout to be completed.
+	 */
+	NVME_CTRLR_STATE_WAIT_FOR_KEEP_ALIVE_TIMEOUT,
+
+	/**
 	 * Get Identify I/O Command Set Specific Controller data structure.
 	 */
 	NVME_CTRLR_STATE_IDENTIFY_IOCS_SPECIFIC,
@@ -725,19 +745,19 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_WAIT_FOR_IDENTIFY_ID_DESCS,
 
 	/**
-	 * Configure AER of the controller.
-	 */
-	NVME_CTRLR_STATE_CONFIGURE_AER,
-
-	/**
-	 * Waiting for the Configure AER to be completed.
-	 */
-	NVME_CTRLR_STATE_WAIT_FOR_CONFIGURE_AER,
-
-	/**
 	 * Set supported log pages of the controller.
 	 */
 	NVME_CTRLR_STATE_SET_SUPPORTED_LOG_PAGES,
+
+	/**
+	 * Set supported log pages of INTEL controller.
+	 */
+	NVME_CTRLR_STATE_SET_SUPPORTED_INTEL_LOG_PAGES,
+
+	/**
+	 * Waiting for supported log pages of INTEL controller.
+	 */
+	NVME_CTRLR_STATE_WAIT_FOR_SUPPORTED_INTEL_LOG_PAGES,
 
 	/**
 	 * Set supported features of the controller.
@@ -755,16 +775,6 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_WAIT_FOR_DB_BUF_CFG,
 
 	/**
-	 * Set Keep Alive Timeout of the controller.
-	 */
-	NVME_CTRLR_STATE_SET_KEEP_ALIVE_TIMEOUT,
-
-	/**
-	 * Waiting for Set Keep Alive Timeout to be completed.
-	 */
-	NVME_CTRLR_STATE_WAIT_FOR_KEEP_ALIVE_TIMEOUT,
-
-	/**
 	 * Set Host ID of the controller.
 	 */
 	NVME_CTRLR_STATE_SET_HOST_ID,
@@ -780,7 +790,7 @@ enum nvme_ctrlr_state {
 	NVME_CTRLR_STATE_READY,
 
 	/**
-	 * Controller inilialization has an error.
+	 * Controller initialization has an error.
 	 */
 	NVME_CTRLR_STATE_ERROR
 };
@@ -937,7 +947,7 @@ struct spdk_nvme_ctrlr {
 	/**
 	 * Keep track of active namespaces
 	 */
-	uint32_t			max_active_ns_idx;
+	uint32_t			active_ns_count;
 	uint32_t			*active_ns_list;
 
 	struct spdk_bit_array		*free_io_qids;
@@ -1188,7 +1198,7 @@ void	nvme_qpair_deinit(struct spdk_nvme_qpair *qpair);
 void	nvme_qpair_complete_error_reqs(struct spdk_nvme_qpair *qpair);
 int	nvme_qpair_submit_request(struct spdk_nvme_qpair *qpair,
 				  struct nvme_request *req);
-void	nvme_qpair_abort_reqs(struct spdk_nvme_qpair *qpair, uint32_t dnr);
+void	nvme_qpair_abort_all_queued_reqs(struct spdk_nvme_qpair *qpair, uint32_t dnr);
 uint32_t nvme_qpair_abort_queued_reqs_with_cbarg(struct spdk_nvme_qpair *qpair, void *cmd_cb_arg);
 void	nvme_qpair_abort_queued_reqs(struct spdk_nvme_qpair *qpair, uint32_t dnr);
 void	nvme_qpair_resubmit_requests(struct spdk_nvme_qpair *qpair, uint32_t num_requests);

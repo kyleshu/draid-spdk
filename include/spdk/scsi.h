@@ -236,7 +236,7 @@ struct spdk_scsi_lun *spdk_scsi_dev_get_first_lun(struct spdk_scsi_dev *dev);
 /**
  * Get the next logical unit of a SCSI device.
  *
- * \param lun Previous logical unit.
+ * \param prev_lun Previous logical unit.
  *
  * \return the next logical unit of a SCSI device, or NULL if the prev_lun was the last.
  */
@@ -255,7 +255,7 @@ bool spdk_scsi_dev_has_pending_tasks(const struct spdk_scsi_dev *dev,
 				     const struct spdk_scsi_port *initiator_port);
 
 /**
- * Destruct the SCSI decice.
+ * Destruct the SCSI device.
  *
  * \param dev SCSI device.
  * \param cb_fn Callback function.
@@ -454,7 +454,7 @@ const char *spdk_scsi_port_get_name(const struct spdk_scsi_port *port);
 /**
  * Construct a new SCSI task.
  *
- * \param task SCSI task to consturct.
+ * \param task SCSI task to construct.
  * \param cpl_fn Called when the task is completed.
  * \param free_fn Called when the task is freed
  */
