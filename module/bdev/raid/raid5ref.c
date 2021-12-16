@@ -107,6 +107,9 @@ struct raid5_io_channel {
 
 	/* Array of source and destination buffer pointers for parity calculation */
 	void **chunk_xor_buffers;
+
+	/* To retry in case of running out of stripe requests */
+	TAILQ_HEAD(, spdk_bdev_io_wait_entry) retry_queue;
 };
 
 #define FOR_EACH_CHUNK(req, c) \
@@ -243,6 +246,18 @@ raid5_stripe_write_complete(struct stripe_request *stripe_req)
 	}
 
 	spdk_mempool_put(r5ch->stripe_request_mempool, stripe_req);
+
+	if (!TAILQ_EMPTY(&r5ch->retry_queue)) {
+		struct spdk_bdev_io_wait_entry *waitq_entry;
+		int n = raid5_stripe_data_chunks_num(r5ch->r5info->raid_bdev);
+
+		while (n--) {
+			waitq_entry = TAILQ_FIRST(&r5ch->retry_queue);
+			assert(waitq_entry != NULL);
+			TAILQ_REMOVE(&r5ch->retry_queue, waitq_entry, link);
+			waitq_entry->cb_fn(waitq_entry->cb_arg);
+		}
+	}
 }
 
 static void
@@ -366,8 +381,14 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
 		}
 
 		stripe_req = spdk_mempool_get(r5ch->stripe_request_mempool);
-		assert(stripe_req != NULL); /* TODO: handle this */
+		if (spdk_unlikely(stripe_req == NULL)) {
+			struct spdk_bdev_io_wait_entry *wqe = &raid_io->waitq_entry;
 
+			wqe->cb_fn = _raid5_submit_rw_request;
+			wqe->cb_arg = raid_io;
+			TAILQ_INSERT_TAIL(&r5ch->retry_queue, wqe, link);
+			return 0;
+		}
 		stripe_req->stripe_index = stripe_index;
 		stripe_req->status = SPDK_BDEV_IO_STATUS_SUCCESS;
 		stripe_req->parity_chunk = &stripe_req->chunks[raid5_stripe_parity_chunk_index(raid_bdev,
@@ -472,6 +493,8 @@ raid5_io_channel_resource_deinit(void *resource)
 {
 	struct raid5_io_channel *r5ch = resource;
 
+	assert(TAILQ_EMPTY(&r5ch->retry_queue));
+
 	free(r5ch->chunk_xor_buffers);
 	free(r5ch->chunk_iov_iters);
 
@@ -517,6 +540,8 @@ raid5_io_channel_resource_init(struct raid_bdev *raid_bdev, void *resource)
 	struct raid_base_bdev_info *base_info;
 	size_t alignment;
 	unsigned int i;
+
+	TAILQ_INIT(&r5ch->retry_queue);
 
 	r5ch->r5info = raid_bdev->module_private;
 

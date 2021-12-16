@@ -97,6 +97,9 @@ struct raid5_io_channel {
 
 	/* Array of source and destination buffer pointers for parity calculation */
 	void **chunk_xor_buffers;
+
+	/* To retry in case of running out of stripe requests */
+	TAILQ_HEAD(, spdk_bdev_io_wait_entry) retry_queue;
 };
 
 struct raid5_info {
