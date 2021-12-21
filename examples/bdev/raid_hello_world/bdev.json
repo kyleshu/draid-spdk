@@ -30,7 +30,7 @@
         {
           "method": "bdev_raid_create",
           "params": {
-            "name": "Raid5",
+            "name": "Raid0",
             "strip_size_kb": 4,
             "raid_level": "5",
             "base_bdevs": [
