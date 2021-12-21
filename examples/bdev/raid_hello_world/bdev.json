@@ -31,9 +31,13 @@
           "method": "bdev_raid_create",
           "params": {
             "name": "Raid0",
-            "strip_size_kb": 64,
-            "raid_level": 0,
-            "base_bdevs": "Malloc0 Malloc1 Malloc2"
+            "strip_size_kb": 4,
+            "raid_level": "0",
+            "base_bdevs": [
+              "Malloc0",
+              "Malloc1",
+              "Malloc2"
+            ]
           }
         }
       ]
