@@ -1,6 +1,4 @@
 #
-#  BSD LICENSE
-#
 #  Copyright (c) Intel Corporation.
 #  All rights reserved.
 #
@@ -31,18 +29,14 @@
 #  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-SPDK_ROOT_DIR := $(abspath $(CURDIR)/../..)
+SPDK_ROOT_DIR := $(abspath $(CURDIR)/../../..)
 include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
+include $(SPDK_ROOT_DIR)/mk/spdk.modules.mk
 
-DIRS-$(CONFIG_FIO_PLUGIN) = fio_plugin
-DIRS-y += hello_world raid_hello_world
+APP = raid_hello_bdev
 
-.PHONY: all clean $(DIRS-y)
+C_SRCS := raid_hello_bdev.c
 
-all: $(DIRS-y)
-	@:
+SPDK_LIB_LIST = $(ALL_MODULES_LIST) event event_bdev
 
-clean: $(DIRS-y)
-	@:
-
-include $(SPDK_ROOT_DIR)/mk/spdk.subdirs.mk
+include $(SPDK_ROOT_DIR)/mk/spdk.app.mk
