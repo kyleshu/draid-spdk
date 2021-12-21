@@ -116,7 +116,7 @@ struct raid5_info {
 #define FOR_EACH_CHUNK(req, c) \
 	for (c = req->chunks; c < req->chunks + req->r5ch->r5info->raid_bdev->num_base_bdevs; c++)
 
-/* TODO: only works for RAID5 because you RAID6 has both P & Q */
+/* TODO: only works for RAID5 because RAID6 has both P & Q */
 #define __NEXT_DATA_CHUNK(req, c) \
 	c+1 == req->parity_chunk ? c+2 : c+1
 
@@ -328,7 +328,7 @@ raid5_chunk_write(struct chunk *chunk)
     }
 }
 
-/* full stripe write TODO: add partial stripe write */
+/* full stripe write. TODO: add partial stripe write */
 static void
 raid5_stripe_write(struct stripe_request *stripe_req)
 {
@@ -358,7 +358,8 @@ _raid5_submit_rw_request(void *_raid_io)
     raid5_submit_rw_request(raid_io);
 }
 
-/* TODO: need to understand this method better */
+/* TODO: this approach won't work at all for partial stripe update
+ * because we don't know how many sub-ios should be seen */
 static int
 raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
                            uint64_t stripe_offset)
@@ -368,11 +369,14 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
     struct stripe_request *stripe_req;
     struct chunk *chunk;
 
-    if (r5ch->current_stripe_request == NULL) {
+    if (r5ch->current_stripe_request == NULL) { // if this is the first sub_io received
         struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
         struct spdk_bdev_io *parent_bdev_io = spdk_bdev_io_get_split_parent(bdev_io);
 
         /* check if this is a split request and that the parent request spans the entire stripe */
+        // 1. parent io must exist
+        // 2. parent must begin at the head of this stripe
+        // 3. parent must end at the tail of this stripe
         if (parent_bdev_io == NULL ||
             parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
             parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
@@ -380,8 +384,9 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
             return -EINVAL;
         }
 
+        // get a stripe request from mempool
         stripe_req = spdk_mempool_get(r5ch->stripe_request_mempool);
-        if (spdk_unlikely(stripe_req == NULL)) {
+        if (spdk_unlikely(stripe_req == NULL)) { // only happens when running out of all 128 requests
             struct spdk_bdev_io_wait_entry *wqe = &raid_io->waitq_entry;
 
             wqe->cb_fn = _raid5_submit_rw_request;
@@ -398,8 +403,8 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
         stripe_req = r5ch->current_stripe_request;
     }
 
-    chunk = &stripe_req->chunks[stripe_offset >> raid_bdev->strip_size_shift];
-    if (chunk >= stripe_req->parity_chunk) {
+    chunk = &stripe_req->chunks[stripe_offset >> raid_bdev->strip_size_shift]; // offset by blocks to offset in stripe
+    if (chunk >= stripe_req->parity_chunk) { // if it's located after parity, increment by 1
         chunk++;
     }
 
@@ -407,6 +412,7 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
     chunk->raid_io = raid_io;
     stripe_req->remaining++;
 
+    // only start stripe write when enough data chunks are received
     if (stripe_req->remaining == raid5_stripe_data_chunks_num(raid_bdev)) {
         r5ch->current_stripe_request = NULL;
         stripe_req->remaining++; /* parity */
@@ -618,7 +624,7 @@ raid5_start(struct raid_bdev *raid_bdev)
 
     raid_bdev->bdev.blockcnt = r5info->stripe_blocks * r5info->total_stripes;
     raid_bdev->bdev.optimal_io_boundary = raid_bdev->strip_size;
-    raid_bdev->bdev.split_on_optimal_io_boundary = true;
+    raid_bdev->bdev.split_on_optimal_io_boundary = true; // each chunk will be submitted separately
     raid_bdev->bdev.write_unit_size = r5info->stripe_blocks;
 
     raid_bdev->module_private = r5info;
