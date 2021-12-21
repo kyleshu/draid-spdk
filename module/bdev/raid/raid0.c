@@ -103,7 +103,7 @@ raid0_submit_rw_request(struct raid_bdev_io *raid_io)
 	struct raid_base_bdev_info	*base_info;
 	struct spdk_io_channel		*base_ch;
     uint64_t num_blocks = bdev_io->u.bdev.num_blocks;
-    SPDK_NOTICELOG("num_blocks is: %llu\n", num_blocks);
+    SPDK_NOTICELOG("num_blocks is: %lu\n", num_blocks);
     SPDK_NOTICELOG("stripe size is: %u\n", raid_bdev->strip_size);
 
 	start_strip = bdev_io->u.bdev.offset_blocks >> raid_bdev->strip_size_shift;
