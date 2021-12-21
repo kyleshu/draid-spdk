@@ -1006,6 +1006,15 @@ struct spdk_thread *spdk_bdev_io_get_thread(struct spdk_bdev_io *bdev_io);
  */
 struct spdk_io_channel *spdk_bdev_io_get_io_channel(struct spdk_bdev_io *bdev_io);
 
+
+/**
+ * Get the parent bdev_io if the given bdev_io is the result of a split.
+ *
+ * \param bdev_io I/O
+ * \return the split parent bdev_io pointer or NULL if this bdev_io was not split.
+ */
+struct spdk_bdev_io *spdk_bdev_io_get_split_parent(struct spdk_bdev_io *bdev_io);
+
 /**
  * Resize for a bdev.
  *

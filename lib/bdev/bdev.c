@@ -3398,6 +3398,17 @@ spdk_bdev_get_io_channel(struct spdk_bdev_desc *desc)
 	return spdk_get_io_channel(__bdev_to_io_dev(spdk_bdev_desc_get_bdev(desc)));
 }
 
+
+struct spdk_bdev_io *
+spdk_bdev_io_get_split_parent(struct spdk_bdev_io *bdev_io)
+{
+	if (bdev_io->internal.cb == bdev_io_split_done) {
+		return bdev_io->internal.caller_ctx;
+	}
+
+	return NULL;
+}
+
 void *
 spdk_bdev_get_module_ctx(struct spdk_bdev_desc *desc)
 {
