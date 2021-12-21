@@ -486,6 +486,8 @@ raid5_submit_rw_request(struct raid_bdev_io *raid_io)
     int ret;
 
     assert(bdev_io->u.bdev.num_blocks <= r5info->raid_bdev->strip_size);
+    SPDK_NOTICELOG("num_blocks is: %llu\n", num_blocks);
+    SPDK_NOTICELOG("stripe size is: %u\n", r5info->raid_bdev->strip_size);
 
     if (bdev_io->type == SPDK_BDEV_IO_TYPE_READ) {
         SPDK_NOTICELOG("Entering read\n");
