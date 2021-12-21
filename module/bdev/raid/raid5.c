@@ -476,6 +476,7 @@ raid5_submit_read_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
 static void
 raid5_submit_rw_request(struct raid_bdev_io *raid_io)
 {
+    SPDK_NOTICELOG("Received new request\n");
     struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
     struct raid5_info *r5info = raid_io->raid_bdev->module_private;
     uint64_t offset_blocks = bdev_io->u.bdev.offset_blocks;
@@ -487,9 +488,11 @@ raid5_submit_rw_request(struct raid_bdev_io *raid_io)
     assert(bdev_io->u.bdev.num_blocks <= r5info->raid_bdev->strip_size);
 
     if (bdev_io->type == SPDK_BDEV_IO_TYPE_READ) {
+        SPDK_NOTICELOG("Entering read\n");
         ret = raid5_submit_read_request(raid_io, stripe_index, stripe_offset);
     } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE &&
                num_blocks == r5info->raid_bdev->strip_size) {
+        SPDK_NOTICELOG("Entering write\n");
         ret = raid5_submit_write_request(raid_io, stripe_index, stripe_offset);
     } else {
         ret = -EINVAL;
