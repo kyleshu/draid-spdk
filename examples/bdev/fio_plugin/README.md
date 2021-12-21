@@ -63,7 +63,7 @@ LD_PRELOAD=<path to spdk repo>/build/fio/spdk_bdev fio
 The fio configuration file must contain parameter pointing to a JSON configuration file containing SPDK bdev configuration:
 
 ```bash
-spdk_json_conf=./examples/bdev/fio_plugin/bdev.json
+spdk_json_conf=./examples/bdev/fio_plugin/raid5_bdev.json
 ```
 
 You can specify which block device to run against by setting the filename parameter
@@ -102,7 +102,7 @@ These examples assume you have built fio and SPDK with `--with-fio` option enabl
 - Run gen_nvme.sh script to create a JSON file with bdev subsystem configuration
 
     ```bash
-    scripts/gen_nvme.sh --json-with-subsystems > /tmp/bdev.json
+    scripts/gen_nvme.sh --json-with-subsystems > /tmp/raid5_bdev.json
 
     cat /tmp/bdev_local.json  | jq
     {
@@ -139,7 +139,7 @@ These examples assume you have built fio and SPDK with `--with-fio` option enabl
 
     [global]
     ioengine=/spdk/build/fio/spdk_bdev
-    spdk_json_conf=/tmp/bdev.json
+    spdk_json_conf=/tmp/raid5_bdev.json
 
     thread=1
     direct=1
@@ -183,9 +183,9 @@ These examples assume you have built fio and SPDK with `--with-fio` option enabl
 
     ```bash
     scripts/gen_nvme.sh --json-with-subsystems --mode=remote \
-    --trid=tcp:10.0.0.1:4420:nqn.2018-09.io.spdk:cnode1 > /tmp/bdev.json
+    --trid=tcp:10.0.0.1:4420:nqn.2018-09.io.spdk:cnode1 > /tmp/raid5_bdev.json
 
-    cat /tmp/bdev.json | jq
+    cat /tmp/raid5_bdev.json | jq
     {
         "subsystems": [
         {
@@ -215,7 +215,7 @@ These examples assume you have built fio and SPDK with `--with-fio` option enabl
 
     [global]
     ioengine=/spdk/build/fio/spdk_bdev
-    spdk_json_conf=/tmp/bdev.json
+    spdk_json_conf=/tmp/raid5_bdev.json
 
     thread=1
     direct=1

@@ -88,6 +88,7 @@ _raid0_submit_rw_request(void *_raid_io)
 static void
 raid0_submit_rw_request(struct raid_bdev_io *raid_io)
 {
+    SPDK_NOTICELOG("Received new request\n");
 	struct spdk_bdev_io		*bdev_io = spdk_bdev_io_from_ctx(raid_io);
 	struct raid_bdev_io_channel	*raid_ch = raid_io->raid_ch;
 	struct raid_bdev		*raid_bdev = raid_io->raid_bdev;
