@@ -381,7 +381,11 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
             parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
             parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
             (stripe_index + 1) * r5ch->r5info->stripe_blocks) {
-            SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io == NULL);
+            SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
+            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks);
+            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index);
+            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks);
+            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks);
             SPDK_NOTICELOG("Not a full stripe\n");
             return -EINVAL;
         }
