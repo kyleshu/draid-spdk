@@ -370,22 +370,24 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
     struct chunk *chunk;
 
     if (r5ch->current_stripe_request == NULL) { // if this is the first sub_io received
+        SPDK_NOTICELOG("This is the first io of this stripe\n");
         struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
         struct spdk_bdev_io *parent_bdev_io = spdk_bdev_io_get_split_parent(bdev_io);
 
+        SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
+        SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); 
+        SPDK_NOTICELOG("stripe index: %lu\n", stripe_index);
+        SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks);
+        SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); 
         /* check if this is a split request and that the parent request spans the entire stripe */
         // 1. parent io must exist
-        // 2. parent must begin at the head of this stripe
-        // 3. parent must end at the tail of this stripe
+        // 2. parent beginning offset must be less than or equal to the head of this stripe
+        // 3. parent ending offset must be greater than or equal to the tail of this stripe
+        // TODO: need to allow partial stripe
         if (parent_bdev_io == NULL ||
             parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
             parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
             (stripe_index + 1) * r5ch->r5info->stripe_blocks) {
-            SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
-            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); // 0
-            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index); // 1
-            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks); //24
-            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); // 16
             SPDK_NOTICELOG("Not a full stripe\n");
             return -EINVAL;
         }
@@ -423,6 +425,44 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
         r5ch->current_stripe_request = NULL;
         stripe_req->remaining++; /* parity */
         raid5_stripe_write(stripe_req);
+    }
+
+    return 0;
+}
+
+/* TODO: in case write in partial chunk, must read the original value to make it complete
+ * this cannot be full stripe */
+static int
+raid5_submit_write_request_partial_chunk(struct raid_bdev_io *raid_io, 
+                           uint64_t stripe_index, uint64_t stripe_offset)
+{
+    //struct raid_bdev *raid_bdev = raid_io->raid_bdev;
+    struct raid5_io_channel *r5ch = raid_bdev_io_channel_get_resource(raid_io->raid_ch);
+    //struct stripe_request *stripe_req;
+    //struct chunk *chunk;
+
+    if (r5ch->current_stripe_request == NULL) { // if this is the first sub_io received
+        SPDK_NOTICELOG("This is the first io of this stripe\n");
+        struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
+        struct spdk_bdev_io *parent_bdev_io = spdk_bdev_io_get_split_parent(bdev_io);
+
+        /* check if this is a split request and that the parent request spans the entire stripe */
+        // 1. parent io must exist
+        // 2. parent must begin at the head of this stripe
+        // 3. parent must end at the tail of this stripe
+        // TODO: need to allow partial stripe
+        if (parent_bdev_io == NULL ||
+            parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
+            parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
+            (stripe_index + 1) * r5ch->r5info->stripe_blocks) {
+            SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
+            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); // 0
+            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index); // 1
+            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks); //24
+            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); // 16
+            SPDK_NOTICELOG("Not a full stripe\n");
+            return -EINVAL;
+        }
     }
 
     return 0;
@@ -500,8 +540,11 @@ raid5_submit_rw_request(struct raid_bdev_io *raid_io)
         ret = raid5_submit_read_request(raid_io, stripe_index, stripe_offset);
     } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE &&
                num_blocks == r5info->raid_bdev->strip_size) {
+        // only full chunk enters this branch
         SPDK_NOTICELOG("Entering write\n");
         ret = raid5_submit_write_request(raid_io, stripe_index, stripe_offset);
+    } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE) {
+        ret = raid5_submit_write_request_partial_chunk(raid_io, stripe_index, stripe_offset);
     } else {
         ret = -EINVAL;
     }
