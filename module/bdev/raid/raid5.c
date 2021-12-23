@@ -64,6 +64,12 @@ struct stripe_request {
 	/* The stripe's parity chunk */
 	struct chunk *parity_chunk;
 
+    /* pre-read chunks required */
+    int required_chunks;
+
+    /* pre-read chunks loaded */
+    int loaded_chunks;
+
 	/* Array of chunks corresponding to base_bdevs */
 	struct chunk {
 		/* Corresponds to base_bdev index */
@@ -74,6 +80,12 @@ struct stripe_request {
 
 		/* For retrying base bdev IOs in case submit fails with -ENOMEM */
 		struct spdk_bdev_io_wait_entry waitq_entry;
+
+        /* read previous value */
+        struct iovec read_iov;
+
+        /* is this chunk required */
+        bool read_required;
 	} chunks[0];
 };
 
@@ -88,6 +100,11 @@ struct raid5_io_channel {
 
 	/* Array of parity buffers for every available stripe request */
 	void **stripe_parity_buffers;
+
+    /* Array of read buffers for every available stripe request
+     * TODO: remember to initialize it
+     */
+    void ***stripe_read_buffers;
 
 	/* Array of iovec iterators for each data chunk */
 	struct iov_iter {
@@ -347,6 +364,29 @@ raid5_stripe_write(struct stripe_request *stripe_req)
 }
 
 static void
+raid5_chunk_preread_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+    //TODO: if all required chunks are ready, proceed to partial stripe write
+}
+
+static void
+raid5_chunk_preread(struct chunk *chunk)
+{
+    //TODO: read a chunk into iov
+}
+
+static void
+raid5_stripe_preread(struct stripe_request *stripe_req)
+{
+    struct chunk *chunk;
+    FOR_EACH_CHUNK(stripe_req, chunk) {
+        if (chunk->read_required) {
+            // TODO: read it into dedicated iov
+        }
+    }    
+}
+
+static void
 raid5_submit_rw_request(struct raid_bdev_io *raid_io);
 
 /* for retry */
@@ -374,39 +414,47 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
         struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
         struct spdk_bdev_io *parent_bdev_io = spdk_bdev_io_get_split_parent(bdev_io);
 
+        // get a stripe request from mempool
         SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
-        SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); 
-        SPDK_NOTICELOG("stripe index: %lu\n", stripe_index);
-        SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks);
-        SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); 
+        stripe_req = spdk_mempool_get(r5ch->stripe_request_mempool);
+        if (spdk_unlikely(stripe_req == NULL)) { // only happens when running out of all 128 requests
+            struct spdk_bdev_io_wait_entry *wqe = &raid_io->waitq_entry;
+            wqe->cb_fn = _raid5_submit_rw_request;
+            wqe->cb_arg = raid_io;
+            TAILQ_INSERT_TAIL(&r5ch->retry_queue, wqe, link);
+            return 0;
+        }     
+        stripe_req->stripe_index = stripe_index;
+        stripe_req->status = SPDK_BDEV_IO_STATUS_SUCCESS;
+        stripe_req->parity_chunk = &stripe_req->chunks[raid5_stripe_parity_chunk_index(raid_bdev, stripe_index)];
+        r5ch->current_stripe_request = stripe_req;   
+
         /* check if this is a split request and that the parent request spans the entire stripe */
         // 1. parent io must exist
         // 2. parent beginning offset must be less than or equal to the head of this stripe
         // 3. parent ending offset must be greater than or equal to the tail of this stripe
         // TODO: need to allow partial stripe
-        if (parent_bdev_io == NULL ||
-            parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
+        if (parent_bdev_io == NULL) {
+            SPDK_NOTICELOG("No parent io\n");
+            // single chunk: read old value and old parity
+            return -EINVAL;
+        } else if (parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
             parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
             (stripe_index + 1) * r5ch->r5info->stripe_blocks) {
-            SPDK_NOTICELOG("Not a full stripe\n");
+            SPDK_NOTICELOG("Parent io exists\n");
+            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); 
+            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index);
+            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks);
+            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); 
+            // multiple chunks: must decide optimal strategy
             return -EINVAL;
+        } else {
+            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); 
+            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index);
+            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks);
+            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); 
+            // full stripe: no optimization can be done
         }
-
-        // get a stripe request from mempool
-        stripe_req = spdk_mempool_get(r5ch->stripe_request_mempool);
-        if (spdk_unlikely(stripe_req == NULL)) { // only happens when running out of all 128 requests
-            struct spdk_bdev_io_wait_entry *wqe = &raid_io->waitq_entry;
-
-            wqe->cb_fn = _raid5_submit_rw_request;
-            wqe->cb_arg = raid_io;
-            TAILQ_INSERT_TAIL(&r5ch->retry_queue, wqe, link);
-            return 0;
-        }
-        stripe_req->stripe_index = stripe_index;
-        stripe_req->status = SPDK_BDEV_IO_STATUS_SUCCESS;
-        stripe_req->parity_chunk = &stripe_req->chunks[raid5_stripe_parity_chunk_index(raid_bdev,
-                                                                                       stripe_index)];
-        r5ch->current_stripe_request = stripe_req;
     } else {
         stripe_req = r5ch->current_stripe_request;
     }
@@ -425,44 +473,6 @@ raid5_submit_write_request(struct raid_bdev_io *raid_io, uint64_t stripe_index,
         r5ch->current_stripe_request = NULL;
         stripe_req->remaining++; /* parity */
         raid5_stripe_write(stripe_req);
-    }
-
-    return 0;
-}
-
-/* TODO: in case write in partial chunk, must read the original value to make it complete
- * this cannot be full stripe */
-static int
-raid5_submit_write_request_partial_chunk(struct raid_bdev_io *raid_io, 
-                           uint64_t stripe_index, uint64_t stripe_offset)
-{
-    //struct raid_bdev *raid_bdev = raid_io->raid_bdev;
-    struct raid5_io_channel *r5ch = raid_bdev_io_channel_get_resource(raid_io->raid_ch);
-    //struct stripe_request *stripe_req;
-    //struct chunk *chunk;
-
-    if (r5ch->current_stripe_request == NULL) { // if this is the first sub_io received
-        SPDK_NOTICELOG("This is the first io of this stripe\n");
-        struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
-        struct spdk_bdev_io *parent_bdev_io = spdk_bdev_io_get_split_parent(bdev_io);
-
-        /* check if this is a split request and that the parent request spans the entire stripe */
-        // 1. parent io must exist
-        // 2. parent must begin at the head of this stripe
-        // 3. parent must end at the tail of this stripe
-        // TODO: need to allow partial stripe
-        if (parent_bdev_io == NULL ||
-            parent_bdev_io->u.bdev.offset_blocks > stripe_index * r5ch->r5info->stripe_blocks ||
-            parent_bdev_io->u.bdev.offset_blocks + parent_bdev_io->u.bdev.num_blocks <
-            (stripe_index + 1) * r5ch->r5info->stripe_blocks) {
-            SPDK_NOTICELOG("parent_bdev_io is not null: %d\n", parent_bdev_io != NULL);
-            SPDK_NOTICELOG("parent_bdev_io offset_blocks: %lu\n", parent_bdev_io->u.bdev.offset_blocks); // 0
-            SPDK_NOTICELOG("stripe index: %lu\n", stripe_index); // 1
-            SPDK_NOTICELOG("parent_bdev_io num_blocks: %lu\n", parent_bdev_io->u.bdev.num_blocks); //24
-            SPDK_NOTICELOG("stripe blocks: %lu\n", r5ch->r5info->stripe_blocks); // 16
-            SPDK_NOTICELOG("Not a full stripe\n");
-            return -EINVAL;
-        }
     }
 
     return 0;
@@ -538,13 +548,9 @@ raid5_submit_rw_request(struct raid_bdev_io *raid_io)
     if (bdev_io->type == SPDK_BDEV_IO_TYPE_READ) {
         SPDK_NOTICELOG("Entering read\n");
         ret = raid5_submit_read_request(raid_io, stripe_index, stripe_offset);
-    } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE &&
-               num_blocks == r5info->raid_bdev->strip_size) {
-        // only full chunk enters this branch
+    } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE) {
         SPDK_NOTICELOG("Entering write\n");
         ret = raid5_submit_write_request(raid_io, stripe_index, stripe_offset);
-    } else if (bdev_io->type == SPDK_BDEV_IO_TYPE_WRITE) {
-        ret = raid5_submit_write_request_partial_chunk(raid_io, stripe_index, stripe_offset);
     } else {
         ret = -EINVAL;
     }
