@@ -1186,7 +1186,7 @@ raid5_io_channel_resource_init(struct raid_bdev *raid_bdev, void *resource)
 }
 
 static void
-raid5_io_channel_resource_deinit(struct raid_bdev *raid_bdev, void *resource)
+raid5_io_channel_resource_deinit(void *resource)
 {
     struct raid5_io_channel *r5ch = resource;
 
@@ -1206,4 +1206,4 @@ static struct raid_bdev_module g_raid5_module = {
 };
 RAID_MODULE_REGISTER(&g_raid5_module)
 
-SPDK_LOG_REGISTER_COMPONENT("bdev_raid5", SPDK_LOG_BDEV_RAID5)
+SPDK_LOG_REGISTER_COMPONENT(bdev_raid5)
