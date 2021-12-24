@@ -110,7 +110,7 @@ hello_read(void *arg)
 
 	SPDK_NOTICELOG("Reading io\n");
 	rc = spdk_bdev_read(hello_context->bdev_desc, hello_context->bdev_io_channel,
-			    hello_context->buff, 8, length, read_complete, hello_context);
+			    hello_context->buff, 16, length, read_complete, hello_context);
 
 	if (rc == -ENOMEM) {
 		SPDK_NOTICELOG("Queueing io\n");
@@ -166,7 +166,7 @@ hello_write(void *arg)
 
 	SPDK_NOTICELOG("Writing to the bdev\n");
 	rc = spdk_bdev_write(hello_context->bdev_desc, hello_context->bdev_io_channel,
-			     hello_context->buff, 8, length, write_complete, hello_context);
+			     hello_context->buff, 16, length, write_complete, hello_context);
 
 	if (rc == -ENOMEM) {
 		SPDK_NOTICELOG("Queueing io\n");
