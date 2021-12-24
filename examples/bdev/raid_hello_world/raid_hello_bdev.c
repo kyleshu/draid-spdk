@@ -162,7 +162,7 @@ hello_write(void *arg)
 {
 	struct hello_context_t *hello_context = arg;
 	int rc = 0;
-	uint32_t length = spdk_bdev_get_block_size(hello_context->bdev) * 16;
+	uint32_t length = spdk_bdev_get_block_size(hello_context->bdev) * 8;
 
 	SPDK_NOTICELOG("Writing to the bdev\n");
 	rc = spdk_bdev_write(hello_context->bdev_desc, hello_context->bdev_io_channel,
@@ -284,7 +284,7 @@ hello_start(void *arg1)
 	 */
 	blk_size = spdk_bdev_get_block_size(hello_context->bdev);
 	buf_align = spdk_bdev_get_buf_align(hello_context->bdev);
-	hello_context->buff = spdk_dma_zmalloc(blk_size * 16, buf_align, NULL);
+	hello_context->buff = spdk_dma_zmalloc(blk_size * 8, buf_align, NULL);
 	if (!hello_context->buff) {
 		SPDK_ERRLOG("Failed to allocate buffer\n");
 		spdk_put_io_channel(hello_context->bdev_io_channel);
@@ -292,7 +292,7 @@ hello_start(void *arg1)
 		spdk_app_stop(-1);
 		return;
 	}
-	snprintf(hello_context->buff, blk_size * 16, "%s", "Hello World!\n");
+	snprintf(hello_context->buff, blk_size * 8, "%s", "Hello World!\n");
 
 	if (spdk_bdev_is_zoned(hello_context->bdev)) {
 		hello_reset_zone(hello_context);
