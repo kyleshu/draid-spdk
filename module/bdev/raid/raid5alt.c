@@ -40,7 +40,7 @@
 #include "spdk/string.h"
 #include "spdk/util.h"
 
-#include "spdk_internal/log.h"
+#include "spdk/log.h"
 
 #include <rte_hash.h>
 #include <rte_memory.h>
