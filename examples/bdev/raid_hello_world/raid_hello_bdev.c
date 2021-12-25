@@ -41,7 +41,7 @@
 #include "spdk/bdev_zone.h"
 
 static char *g_bdev_name = "Raid0";
-static uint64_t start_offset = 24;
+static uint64_t start_offset = 25;
 static uint64_t span_length = 4;
 
 /*
