@@ -42,7 +42,7 @@
 
 static char *g_bdev_name = "Raid0";
 static uint64_t start_offset = 25;
-static uint64_t span_length = 4;
+static uint64_t span_length = 30;
 
 /*
  * We'll use this struct to gather housekeeping hello_context to pass between
