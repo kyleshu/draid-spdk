@@ -41,7 +41,7 @@ CFLAGS += -I$(SPDK_ROOT_DIR)/lib/bdev/
 C_SRCS = bdev_raid.c bdev_raid_rpc.c raid0.c
 
 ifeq ($(CONFIG_RAID5),y)
-C_SRCS += raid5alt.c
+C_SRCS += raid5.c
 endif
 
 LIBNAME = bdev_raid
