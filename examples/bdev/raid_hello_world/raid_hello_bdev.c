@@ -41,6 +41,8 @@
 #include "spdk/bdev_zone.h"
 
 static char *g_bdev_name = "Raid0";
+static uint64_t start_offset = 0;
+static uint64_t span_length = 8;
 
 /*
  * We'll use this struct to gather housekeeping hello_context to pass between
@@ -106,11 +108,10 @@ hello_read(void *arg)
 {
 	struct hello_context_t *hello_context = arg;
 	int rc = 0;
-	uint32_t length = 16;
 
 	SPDK_NOTICELOG("Reading io\n");
 	rc = spdk_bdev_read_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
-			    hello_context->buff, 0, length, read_complete, hello_context);
+			    hello_context->buff, start_offset, span_length, read_complete, hello_context);
 
 	if (rc == -ENOMEM) {
 		SPDK_NOTICELOG("Queueing io\n");
@@ -162,11 +163,10 @@ hello_write(void *arg)
 {
 	struct hello_context_t *hello_context = arg;
 	int rc = 0;
-	uint32_t length = 16;
 
 	SPDK_NOTICELOG("Writing to the bdev\n");
 	rc = spdk_bdev_write_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
-			     hello_context->buff, 0, length, write_complete, hello_context);
+			     hello_context->buff, start_offset, span_length, write_complete, hello_context);
 
 	if (rc == -ENOMEM) {
 		SPDK_NOTICELOG("Queueing io\n");
@@ -284,7 +284,7 @@ hello_start(void *arg1)
 	 */
 	blk_size = spdk_bdev_get_block_size(hello_context->bdev);
 	buf_align = spdk_bdev_get_buf_align(hello_context->bdev);
-	hello_context->buff = spdk_dma_zmalloc(blk_size * 16, buf_align, NULL);
+	hello_context->buff = spdk_dma_zmalloc(blk_size * span_length, buf_align, NULL);
 	if (!hello_context->buff) {
 		SPDK_ERRLOG("Failed to allocate buffer\n");
 		spdk_put_io_channel(hello_context->bdev_io_channel);
@@ -292,7 +292,7 @@ hello_start(void *arg1)
 		spdk_app_stop(-1);
 		return;
 	}
-	snprintf(hello_context->buff, blk_size * 16, "%s", "Hello World!\n");
+	snprintf(hello_context->buff, blk_size * span_length, "%s", "Hello World!\n");
 
 	if (spdk_bdev_is_zoned(hello_context->bdev)) {
 		hello_reset_zone(hello_context);
