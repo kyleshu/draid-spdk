@@ -85,6 +85,9 @@ struct raid_base_bdev_info {
 	 */
 	bool			remove_scheduled;
 
+    /* is this block device degraded */
+    bool degraded;
+
 	/* thread where base device is opened */
 	struct spdk_thread	*thread;
 };

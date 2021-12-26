@@ -127,7 +127,7 @@ struct stripe {
     TAILQ_HEAD(requests_head, stripe_request) requests;
 
     /* Protects the requests list */
-    pthread_spinlock_t requests_lock;
+    pthread_spinlock_t requests_lock; // Note: acquire lock when accessing request queue
 
     /* Stripe can be reclaimed if this reaches 0 */
     unsigned int refs;
@@ -156,7 +156,7 @@ struct raid5_info {
     struct stripe *stripes;
 
     /* Hash table containing currently active stripes */
-    struct rte_hash *active_stripes_hash;
+    struct rte_hash *active_stripes_hash; // Note: DPDK's implementation of hash table
 
     /* List of active stripes (in hash table) */
     TAILQ_HEAD(active_stripes_head, stripe) active_stripes;
@@ -177,7 +177,7 @@ struct raid5_io_channel {
 	     c < req->chunks + req->raid_io->raid_bdev->num_base_bdevs; c++)
 
 #define __NEXT_DATA_CHUNK(req, c) \
-	c+1 == req->parity_chunk ? c+2 : c+1
+	c+1 == req->parity_chunk ? c+2 : c+1 // Note: only works for raid5
 
 #define FOR_EACH_DATA_CHUNK(req, c) \
 	for (c = __NEXT_DATA_CHUNK(req, req->chunks-1); \
@@ -193,12 +193,14 @@ raid5_chunk_stripe_req(struct chunk *chunk)
 static inline uint8_t
 raid5_chunk_data_index(struct chunk *chunk)
 {
+    // Note: only works for raid5
     return chunk < raid5_chunk_stripe_req(chunk)->parity_chunk ? chunk->index : chunk->index - 1;
 }
 
 static inline struct chunk *
 raid5_get_data_chunk(struct stripe_request *stripe_req, uint8_t chunk_data_idx)
 {
+    // Note: only works for raid5
     uint8_t p_chunk_idx = stripe_req->parity_chunk - stripe_req->chunks;
 
     return &stripe_req->chunks[chunk_data_idx < p_chunk_idx ? chunk_data_idx : chunk_data_idx + 1];
@@ -207,12 +209,13 @@ raid5_get_data_chunk(struct stripe_request *stripe_req, uint8_t chunk_data_idx)
 static inline uint8_t
 raid5_stripe_data_chunks_num(const struct raid_bdev *raid_bdev)
 {
+    // Note: this also works for raid6
     return raid_bdev->num_base_bdevs - raid_bdev->module->base_bdevs_max_degraded;
 }
 
 #ifdef SPDK_CONFIG_ISAL
 #include "isa-l/include/raid.h"
-
+// Note: also need q for raid6, also this might not be the most efficient implementation
 static void
 raid5_xor_buf(void *restrict to, void *restrict from, size_t size)
 {
@@ -225,6 +228,7 @@ raid5_xor_buf(void *restrict to, void *restrict from, size_t size)
 	}
 }
 #else
+// Note: should not use this one
 static void
 raid5_xor_buf(void *restrict to, void *restrict from, size_t size)
 {
@@ -242,6 +246,7 @@ raid5_xor_buf(void *restrict to, void *restrict from, size_t size)
 }
 #endif
 
+// Note: need q for raid6
 static void
 raid5_xor_iovs(struct iovec *iovs_dest, int iovs_dest_cnt, size_t iovs_dest_offset,
                const struct iovec *iovs_src, int iovs_src_cnt, size_t iovs_src_offset,
@@ -325,6 +330,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
     size_t start_v_off;
     int new_iovcnt = 0;
 
+    // Note: find the start iov
     for (i = 0; i < iovcnt; i++) {
         if (off + iov[i].iov_len > offset) {
             start_v = i;
@@ -339,6 +345,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
 
     start_v_off = off;
 
+    // Note: find the end iov
     for (i = start_v; i < iovcnt; i++) {
         new_iovcnt++;
 
@@ -350,6 +357,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
 
     assert(start_v + new_iovcnt <= iovcnt);
 
+    // Note: allocate new iovs if there are not enough
     if (new_iovcnt > chunk->iovcnt) {
         void *tmp;
 
@@ -367,6 +375,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
     off = start_v_off;
     iov += start_v;
 
+    // Note: set up iovs
     for (i = 0; i < new_iovcnt; i++) {
         chunk->iovs[i].iov_base = iov->iov_base + (offset - off);
         chunk->iovs[i].iov_len = spdk_min(len, iov->iov_len - (offset - off));
@@ -449,6 +458,7 @@ raid5_complete_stripe_request(struct stripe_request *stripe_req)
     struct chunk *chunk;
     uint64_t req_blocks;
 
+    // Note: if next request available, submit it
     pthread_spin_lock(&stripe->requests_lock);
     next_req = TAILQ_NEXT(stripe_req, link);
     TAILQ_REMOVE(&stripe->requests, stripe_req, link);
@@ -605,6 +615,7 @@ raid5_stripe_write_submit(struct stripe_request *stripe_req)
     }
 }
 
+// Note: Read-Modify-Write
 static void
 raid5_stripe_write_preread_complete_rmw(struct stripe_request *stripe_req)
 {
@@ -642,6 +653,7 @@ raid5_stripe_write_preread_complete_rmw(struct stripe_request *stripe_req)
     raid5_stripe_write_submit(stripe_req);
 }
 
+// Note: Reconstruction-Writes
 static void
 raid5_stripe_write_preread_complete(struct stripe_request *stripe_req)
 {
@@ -685,6 +697,7 @@ raid5_stripe_write(struct stripe_request *stripe_req)
     struct chunk *chunk;
     int preread_balance = 0;
 
+    // Note: single chunk -> partial parity update; > 1 chunk -> full parity update
     if (stripe_req->first_data_chunk == stripe_req->last_data_chunk) {
         p_chunk->req_offset = stripe_req->first_data_chunk->req_offset;
         p_chunk->req_blocks = stripe_req->first_data_chunk->req_blocks;
@@ -693,6 +706,10 @@ raid5_stripe_write(struct stripe_request *stripe_req)
         p_chunk->req_blocks = raid_bdev->strip_size;
     }
 
+    // Note: This is the vote process
+    // 1. req_blocks == 0: no update, favors rmw
+    // 2. 0 < req_blocks < stripe_size: partial update, no preference
+    // 3. req_blocks == stripe_size: full update, favors reconstruction write
     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
         if (chunk->req_blocks < p_chunk->req_blocks) {
             preread_balance++;
@@ -703,6 +720,7 @@ raid5_stripe_write(struct stripe_request *stripe_req)
         }
     }
 
+    // TODO: Note: start from here, dRaid has a different implementation
     if (preread_balance > 0) {
         stripe_req->chunk_requests_complete_cb = raid5_stripe_write_preread_complete_rmw;
     } else {
@@ -710,26 +728,27 @@ raid5_stripe_write(struct stripe_request *stripe_req)
     }
 
     FOR_EACH_CHUNK(stripe_req, chunk) {
-        if (preread_balance > 0) {
+        if (preread_balance > 0) { // Note: for RMW, request chunks are the same as the preread chunks
             chunk->preread_offset = chunk->req_offset;
             chunk->preread_blocks = chunk->req_blocks;
         } else {
-            if (chunk == p_chunk) {
+            if (chunk == p_chunk) { // Note: for reconstruction write, no need to read parity
                 chunk->preread_offset = 0;
                 chunk->preread_blocks = 0;
             } else if (stripe_req->first_data_chunk == stripe_req->last_data_chunk) {
-                if (chunk->req_blocks) {
+                if (chunk->req_blocks) { // Note: don't read request chunks
                     chunk->preread_offset = 0;
                     chunk->preread_blocks = 0;
-                } else {
+                } else { // Note: read non-request chunks
                     chunk->preread_offset = p_chunk->req_offset;
                     chunk->preread_blocks = p_chunk->req_blocks;
                 }
             } else {
-                if (chunk->req_offset) {
+                if (chunk->req_offset) { // Note: if it's a request chunk and has offset, we need to make it complete
                     chunk->preread_offset = 0;
                     chunk->preread_blocks = chunk->req_offset;
-                } else {
+                } else { // Note: if it's a request chunk without offset, we need to make it complete
+                    // Note: for non-request chunks, read the full chunk
                     chunk->preread_offset = chunk->req_blocks;
                     chunk->preread_blocks = raid_bdev->strip_size - chunk->req_blocks;
                 }
@@ -754,6 +773,7 @@ raid5_stripe_write(struct stripe_request *stripe_req)
         }
     }
 
+    // Note: If nothing needs to be done, complete immediately
     if (stripe_req->remaining == 0) {
         stripe_req->chunk_requests_complete_cb(stripe_req);
     }
