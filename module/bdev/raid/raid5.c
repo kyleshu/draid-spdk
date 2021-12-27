@@ -66,6 +66,9 @@ struct stripe_request {
     /* Offset into the parent bdev_io iovecs */
     uint64_t iov_offset;
 
+    /* Initial iov_offset */
+    uint64_t init_iov_offset;
+
     /* First data chunk applicable to this request */
     struct chunk *first_data_chunk;
 
@@ -323,6 +326,69 @@ raid5_memset_iovs(struct iovec *iovs, int iovcnt, char c)
     }
 }
 
+static void
+raid5_memcpy_iovs(struct iovec *iovs_dest, int iovs_dest_cnt, size_t iovs_dest_offset,
+               const struct iovec *iovs_src, int iovs_src_cnt, size_t iovs_src_offset,
+               size_t size)
+{
+    struct iovec *v1;
+    const struct iovec *v2;
+    size_t off1, off2;
+    size_t n;
+
+    v1 = iovs_dest;
+    v2 = iovs_src;
+
+    n = 0;
+    off1 = 0;
+    while (v1 < iovs_dest + iovs_dest_cnt) {
+        n += v1->iov_len;
+        if (n > iovs_dest_offset) {
+            off1 = v1->iov_len - (n - iovs_dest_offset);
+            break;
+        }
+        v1++;
+    }
+
+    n = 0;
+    off2 = 0;
+    while (v2 < iovs_src + iovs_src_cnt) {
+        n += v2->iov_len;
+        if (n > iovs_src_offset) {
+            off2 = v2->iov_len - (n - iovs_src_offset);
+            break;
+        }
+        v2++;
+    }
+
+    while (v1 < iovs_dest + iovs_dest_cnt &&
+           v2 < iovs_src + iovs_src_cnt &&
+           size > 0) {
+        n = spdk_min(v1->iov_len - off1, v2->iov_len - off2);
+
+        if (n > size) {
+            n = size;
+        }
+
+        size -= n;
+
+        memcpy(v1->iov_base + off1, v2->iov_base + off2, n);
+
+        off1 += n;
+        off2 += n;
+
+        if (off1 == v1->iov_len) {
+            off1 = 0;
+            v1++;
+        }
+
+        if (off2 == v2->iov_len) {
+            off2 = 0;
+            v2++;
+        }
+    }
+}
+
 static int
 raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
                     uint64_t offset, uint64_t len)
@@ -491,8 +557,52 @@ raid5_complete_stripe_request(struct stripe_request *stripe_req)
 static void
 raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
 {
-    // construct d_chunk
-    // copy data chunk
+    struct chunk *chunk;
+    int ret;
+    struct chunk *d_chunk = stripe_req->degraded_chunk;
+    uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
+    size_t src_offset;
+    uint64_t len;
+    struct iovec *preread_iovs;
+    int preread_iovcnt;
+
+    // Note: construct d_chunk
+    raid5_memset_iovs(d_chunk->iovs, d_chunk->iovcnt, 0);
+    FOR_EACH_CHUNK(stripe_req, chunk) {
+        if (chunk != d_chunk) {
+            if (chunk->request_type == CHUNK_PREREAD) {
+                src_offset = (d_chunk->req_offset - chunk->preread_offset) * blocklen;
+                raid5_xor_iovs(d_chunk->iovs, d_chunk->iovcnt, 0,
+                               chunk->iovs, chunk->iovcnt, src_offset,
+                               d_chunk->req_blocks * blocklen);
+            } else {
+                src_offset = (d_chunk->req_offset - chunk->req_offset) * blocklen;
+                raid5_xor_iovs(d_chunk->iovs, d_chunk->iovcnt, 0,
+                               chunk->iovs, chunk->iovcnt, src_offset,
+                               d_chunk->req_blocks * blocklen);
+            }
+        }
+    }
+
+    // Note: copy data chunk
+    stripe_req->iov_offset = stripe_req->init_iov_offset;
+    FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
+        len = chunk->req_blocks * bdev_io->bdev->blocklen;
+        if (chunk->req_blocks > 0 && chunk != d_chunk && chunk->request_type == CHUNK_PREREAD) {
+            preread_iovs = chunk->iovs;
+            preread_iovcnt = chunk->iovcnt;
+            ret = raid5_chunk_map_req_data(chunk);
+            if (ret) {
+                raid5_abort_stripe_request(stripe_req, errno_to_status(ret));
+            }
+            src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
+            raid5_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
+                           preread_iovs, preread_iovcnt, src_offset,
+                           d_chunk->req_blocks * blocklen);
+        } else {
+            stripe_req->iov_offset += len;
+        }
+    }
     raid5_complete_stripe_request(stripe_req);
 }
 
@@ -835,8 +945,11 @@ raid5_stripe_read(struct stripe_request *stripe_req)
                 if (chunk == d_chunk) { // Note: degraded data chunk, do not read
                     chunk->preread_offset = 0;
                     chunk->preread_blocks = 0;
-                    len = chunk->req_blocks * bdev_io->bdev->blocklen;
-                    stripe_req->iov_offset += len;
+                    ret = raid5_chunk_map_req_data(chunk);
+                    if (ret) {
+                        raid5_abort_stripe_request(stripe_req, errno_to_status(ret));
+                        return;
+                    }
                 } else { // Note: data chunk in request, we only read once
                     if (chunk->req_offset <= d_chunk->req_offset &&
                     chunk->req_offset + chunk->req_blocks >= d_chunk->req_offset + d_chunk->req_blocks) {
@@ -925,6 +1038,7 @@ raid5_handle_stripe(struct raid_bdev_io *raid_io, struct stripe *stripe,
 
     stripe_req->raid_io = raid_io;
     stripe_req->iov_offset = iov_offset;
+    stripe_req->init_iov_offset = iov_offset;
     stripe_req->status = SPDK_BDEV_IO_STATUS_SUCCESS;
     stripe_req->remaining = 0;
 
