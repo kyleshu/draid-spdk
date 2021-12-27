@@ -357,7 +357,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
 
     assert(start_v + new_iovcnt <= iovcnt);
 
-    // Note: allocate new iovs if there are not enough
+    // Note: dynamically change size of iovs
     if (new_iovcnt > chunk->iovcnt) {
         void *tmp;
 
@@ -375,7 +375,7 @@ raid5_chunk_map_iov(struct chunk *chunk, const struct iovec *iov, int iovcnt,
     off = start_v_off;
     iov += start_v;
 
-    // Note: set up iovs
+    // Note: set up iovs from iovs from bdev_io
     for (i = 0; i < new_iovcnt; i++) {
         chunk->iovs[i].iov_base = iov->iov_base + (offset - off);
         chunk->iovs[i].iov_len = spdk_min(len, iov->iov_len - (offset - off));
@@ -653,7 +653,7 @@ raid5_stripe_write_preread_complete_rmw(struct stripe_request *stripe_req)
     raid5_stripe_write_submit(stripe_req);
 }
 
-// Note: Reconstruction-Writes
+// Note: Reconstruction-Writes + full stripe write
 static void
 raid5_stripe_write_preread_complete(struct stripe_request *stripe_req)
 {
@@ -773,7 +773,7 @@ raid5_stripe_write(struct stripe_request *stripe_req)
         }
     }
 
-    // Note: If nothing needs to be done, complete immediately
+    // Note: If no preread needs to be done (full stripe), complete immediately
     if (stripe_req->remaining == 0) {
         stripe_req->chunk_requests_complete_cb(stripe_req);
     }
@@ -784,19 +784,80 @@ raid5_stripe_read(struct stripe_request *stripe_req)
 {
     struct chunk *chunk;
     int ret;
+    struct chunk *p_chunk = stripe_req->parity_chunk;
+    struct raid_bdev_io *raid_io = stripe_req->raid_io;
+    struct raid_bdev *raid_bdev = raid_io->raid_bdev;
+    struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
+    struct raid_base_bdev_info *base_info;
+    struct chunk *d_chunk = NULL;
+    uint64_t len;
 
     stripe_req->chunk_requests_complete_cb = raid5_complete_stripe_request;
 
-    FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
+    // Note: check if any degraded device is involved
+     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
         if (chunk->req_blocks > 0) {
-            ret = raid5_chunk_map_req_data(chunk);
-            if (ret) {
-                raid5_abort_stripe_request(stripe_req, errno_to_status(ret));
-                return;
+            base_info = &raid_bdev->base_bdev_info[chunk->index];
+            if (base_info->degraded) { //Note: assuming raid5, at most 1 degraded
+                d_chunk = chunk;
+                break;
             }
-
-            raid5_submit_chunk_request(chunk, CHUNK_READ);
         }
+    }   
+
+    if (is_recon) { // Note: read necessary blocks for reconstruction
+        stripe_req->chunk_requests_complete_cb = NULL; // TODO:
+        FOR_EACH_CHUNK(stripe_req, chunk) {
+            if (chunk == p_chunk) { // Note: parity chunk
+                chunk->preread_offset = d_chunk->req_offset;
+                chunk->preread_blocks = d_chunk->req_blocks;
+                chunk->iov.iov_base = stripe_req->stripe->chunk_buffers[chunk->index];
+                chunk->iov.iov_len = chunk->preread_blocks * raid_bdev->bdev.blocklen;
+                raid5_submit_chunk_request(chunk, CHUNK_PREREAD);
+            } else if (chunk->req_blocks == 0) { // Note: data chunk not in request
+                chunk->preread_offset = d_chunk->req_offset;
+                chunk->preread_blocks = d_chunk->req_blocks;
+                chunk->iov.iov_base = stripe_req->stripe->chunk_buffers[chunk->index];
+                chunk->iov.iov_len = chunk->preread_blocks * raid_bdev->bdev.blocklen;
+                raid5_submit_chunk_request(chunk, CHUNK_PREREAD);
+            } else { // Note: data chunk in request, we only read once     
+                if (chunk == d_chunk) { // Note: degraded data chunk, do not read
+                    chunk->preread_offset = 0;
+                    chunk->preread_blocks = 0;
+                    len = chunk->req_blocks * bdev_io->bdev->blocklen;
+                    stripe_req->iov_offset += len;
+                } else { // Note: data chunk in request, we only read once
+                    if (chunk->req_offset <= d_chunk->req_offset &&
+                    chunk->req_offset + chunk->req_blocks >= d_chunk->req_offset + d_chunk->req_blocks) {
+                        ret = raid5_chunk_map_req_data(chunk);
+                        if (ret) {
+                            raid5_abort_stripe_request(stripe_req, errno_to_status(ret));
+                            return;
+                        }
+                        raid5_submit_chunk_request(chunk, CHUNK_READ);
+                    } else {
+                        chunk->preread_offset = spdk_min(chunk->req_offset, d_chunk->req_offset);
+                        chunk->preread_blocks = spdk_max(chunk->req_offset + chunk->req_blocks, d_chunk->req_offset + d_chunk->req_blocks) - chunk->preread_offset;
+                        chunk->iov.iov_base = stripe_req->stripe->chunk_buffers[chunk->index];
+                        chunk->iov.iov_len = chunk->preread_blocks * raid_bdev->bdev.blocklen;
+                        len = chunk->req_blocks * bdev_io->bdev->blocklen;
+                        stripe_req->iov_offset += len;
+                        raid5_submit_chunk_request(chunk, CHUNK_PREREAD);                        
+                    }
+                }
+            }
+        }        
+    } else {
+        FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
+            if (chunk->req_blocks > 0) {
+                ret = raid5_chunk_map_req_data(chunk);
+                if (ret) {
+                    raid5_abort_stripe_request(stripe_req, errno_to_status(ret));
+                    return;
+                }
+                raid5_submit_chunk_request(chunk, CHUNK_READ);
+            }
+        }       
     }
 }
 
