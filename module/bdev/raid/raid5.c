@@ -75,6 +75,9 @@ struct stripe_request {
     /* The stripe's parity chunk */
     struct chunk *parity_chunk;
 
+    /* Degraded chunk */
+    struct chunk *degraded_chunk;
+
     /* Link for the stripe's requests list */
     TAILQ_ENTRY(stripe_request) link;
 
@@ -485,6 +488,14 @@ raid5_complete_stripe_request(struct stripe_request *stripe_req)
     }
 }
 
+static void
+raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
+{
+    // construct d_chunk
+    // copy data chunk
+    raid5_complete_stripe_request(stripe_req);
+}
+
 static inline enum spdk_bdev_io_status errno_to_status(int err)
 {
     err = abs(err);
@@ -789,7 +800,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
     struct raid_bdev *raid_bdev = raid_io->raid_bdev;
     struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
     struct raid_base_bdev_info *base_info;
-    struct chunk *d_chunk = NULL;
+    struct chunk *d_chunk = stripe_req->degraded_chunk = NULL;
     uint64_t len;
 
     stripe_req->chunk_requests_complete_cb = raid5_complete_stripe_request;
@@ -799,14 +810,14 @@ raid5_stripe_read(struct stripe_request *stripe_req)
         if (chunk->req_blocks > 0) {
             base_info = &raid_bdev->base_bdev_info[chunk->index];
             if (base_info->degraded) { //Note: assuming raid5, at most 1 degraded
-                d_chunk = chunk;
+                d_chunk = stripe_req->degraded_chunk = chunk;
                 break;
             }
         }
     }   
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
-        stripe_req->chunk_requests_complete_cb = NULL; // TODO:
+        stripe_req->chunk_requests_complete_cb = raid5_complete_reconstructed_stripe_request;
         FOR_EACH_CHUNK(stripe_req, chunk) {
             if (chunk == p_chunk) { // Note: parity chunk
                 chunk->preread_offset = d_chunk->req_offset;
