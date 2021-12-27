@@ -554,6 +554,27 @@ raid5_complete_stripe_request(struct stripe_request *stripe_req)
     }
 }
 
+static inline enum spdk_bdev_io_status errno_to_status(int err)
+{
+    err = abs(err);
+    switch (err) {
+        case 0:
+            return SPDK_BDEV_IO_STATUS_SUCCESS;
+        case ENOMEM:
+            return SPDK_BDEV_IO_STATUS_NOMEM;
+        default:
+            return SPDK_BDEV_IO_STATUS_FAILED;
+    }
+}
+
+static void
+raid5_abort_stripe_request(struct stripe_request *stripe_req, enum spdk_bdev_io_status status)
+{
+    stripe_req->remaining = 0;
+    stripe_req->status = status;
+    raid5_complete_stripe_request(stripe_req);
+}
+
 static void
 raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
 {
@@ -587,7 +608,7 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
     // Note: copy data chunk
     stripe_req->iov_offset = stripe_req->init_iov_offset;
     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
-        len = chunk->req_blocks * bdev_io->bdev->blocklen;
+        len = chunk->req_blocks * blocklen;
         if (chunk->req_blocks > 0 && chunk != d_chunk && chunk->request_type == CHUNK_PREREAD) {
             preread_iovs = chunk->iovs;
             preread_iovcnt = chunk->iovcnt;
@@ -597,33 +618,12 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
             }
             src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
             raid5_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
-                           preread_iovs, preread_iovcnt, src_offset,
-                           d_chunk->req_blocks * blocklen);
+                              preread_iovs, preread_iovcnt, src_offset,
+                              d_chunk->req_blocks * blocklen);
         } else {
             stripe_req->iov_offset += len;
         }
     }
-    raid5_complete_stripe_request(stripe_req);
-}
-
-static inline enum spdk_bdev_io_status errno_to_status(int err)
-{
-    err = abs(err);
-    switch (err) {
-        case 0:
-            return SPDK_BDEV_IO_STATUS_SUCCESS;
-        case ENOMEM:
-            return SPDK_BDEV_IO_STATUS_NOMEM;
-        default:
-            return SPDK_BDEV_IO_STATUS_FAILED;
-    }
-}
-
-static void
-raid5_abort_stripe_request(struct stripe_request *stripe_req, enum spdk_bdev_io_status status)
-{
-    stripe_req->remaining = 0;
-    stripe_req->status = status;
     raid5_complete_stripe_request(stripe_req);
 }
 
