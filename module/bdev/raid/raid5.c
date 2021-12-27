@@ -805,7 +805,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
         }
     }   
 
-    if (is_recon) { // Note: read necessary blocks for reconstruction
+    if (d_chunk) { // Note: read necessary blocks for reconstruction
         stripe_req->chunk_requests_complete_cb = NULL; // TODO:
         FOR_EACH_CHUNK(stripe_req, chunk) {
             if (chunk == p_chunk) { // Note: parity chunk
