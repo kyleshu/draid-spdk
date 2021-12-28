@@ -364,29 +364,6 @@ raid5_stripe_write(struct stripe_request *stripe_req)
 }
 
 static void
-raid5_chunk_preread_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
-{
-    //TODO: if all required chunks are ready, proceed to partial stripe write
-}
-
-static void
-raid5_chunk_preread(struct chunk *chunk)
-{
-    //TODO: read a chunk into iov
-}
-
-static void
-raid5_stripe_preread(struct stripe_request *stripe_req)
-{
-    struct chunk *chunk;
-    FOR_EACH_CHUNK(stripe_req, chunk) {
-        if (chunk->read_required) {
-            // TODO: read it into dedicated iov
-        }
-    }    
-}
-
-static void
 raid5_submit_rw_request(struct raid_bdev_io *raid_io);
 
 /* for retry */
