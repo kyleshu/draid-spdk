@@ -1154,9 +1154,9 @@ raid_bdev_alloc_base_bdev_resource(struct raid_bdev *raid_bdev, const char *bdev
 	raid_bdev->base_bdev_info[base_bdev_slot].bdev = bdev;
 	raid_bdev->base_bdev_info[base_bdev_slot].desc = desc;
     raid_bdev->base_bdev_info[base_bdev_slot].degraded = false;
-//    if (base_bdev_slot == 0) {
-//        raid_bdev->base_bdev_info[base_bdev_slot].degraded = true; //TODO: remove this
-//    }
+    if (base_bdev_slot == 0) {
+        raid_bdev->base_bdev_info[base_bdev_slot].degraded = true; //TODO: remove this
+    }
 	raid_bdev->num_base_bdevs_discovered++;
 	assert(raid_bdev->num_base_bdevs_discovered <= raid_bdev->num_base_bdevs);
 
