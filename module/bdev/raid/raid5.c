@@ -605,7 +605,7 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
         }
     }
 
-    // Note: copy data chunk
+    // Note: copy data chunk if necessary
     stripe_req->iov_offset = stripe_req->init_iov_offset;
     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
         len = chunk->req_blocks * blocklen;
