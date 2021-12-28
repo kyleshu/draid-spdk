@@ -624,6 +624,8 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
             stripe_req->iov_offset += len;
         }
     }
+
+    SPDK_NOTICELOG("Reconstructed read finished\n");
     raid5_complete_stripe_request(stripe_req);
 }
 
@@ -927,6 +929,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
     }   
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
+        SPDK_NOTICELOG("Reconstructed read started\n");
         stripe_req->chunk_requests_complete_cb = raid5_complete_reconstructed_stripe_request;
         FOR_EACH_CHUNK(stripe_req, chunk) {
             if (chunk == p_chunk) { // Note: parity chunk
