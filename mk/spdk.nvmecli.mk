@@ -37,7 +37,7 @@ SPDK_LIB_DIR ?= $(SPDK_ROOT_DIR)/build/lib
 include $(SPDK_ROOT_DIR)/mk/config.mk
 
 DPDK_LIB_DIR ?= $(CONFIG_DPDK_DIR)/lib
-DPDK_LIB_LIST = -lrte_eal -lrte_mempool -lrte_ring -lrte_pci -lrte_bus_pci -lrte_mbuf -lrte_hash
+DPDK_LIB_LIST = -lrte_eal -lrte_mempool -lrte_ring -lrte_pci -lrte_bus_pci -lrte_mbuf
 
 ifneq (, $(wildcard $(DPDK_LIB_DIR)/librte_kvargs.*))
 DPDK_LIB_LIST += -lrte_kvargs
@@ -62,7 +62,7 @@ NVMECLI_SPDK_LIBS += -lspdk_ocfenv
 endif
 
 ifeq ($(CONFIG_VHOST),y)
-DPDK_LIB_LIST += -lrte_vhost -lrte_net -lrte_cryptodev
+DPDK_LIB_LIST += -lrte_vhost -lrte_net -lrte_cryptodev -lrte_hash
 endif
 
 override CFLAGS += -I$(SPDK_ROOT_DIR)/include

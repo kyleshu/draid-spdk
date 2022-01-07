@@ -101,7 +101,7 @@ DPDK_LIB_LIST += rte_cryptodev rte_compressdev rte_bus_vdev
 DPDK_LIB_LIST += rte_common_qat
 endif
 
-LINK_HASH=n
+LINK_HASH=y
 
 ifeq ($(CONFIG_VHOST),y)
 DPDK_LIB_LIST += rte_vhost
