@@ -222,9 +222,9 @@ struct spdk_log_flag {
 void spdk_log_register_flag(const char *name, struct spdk_log_flag *flag);
 
 #define SPDK_LOG_REGISTER_COMPONENT(FLAG) \
-struct spdk_log_flag SPDK_LOG_##FLAG = { \
+struct spdk_log_flag SPDK_LOG_##FLAG = {  \
+    .name = #FLAG, \
 	.enabled = false, \
-	.name = #FLAG, \
 }; \
 __attribute__((constructor)) static void register_flag_##FLAG(void) \
 { \
