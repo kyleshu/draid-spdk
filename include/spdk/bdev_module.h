@@ -52,6 +52,10 @@
 #include "spdk/util.h"
 #include "spdk/uuid.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Block device module */
 struct spdk_bdev_module {
 	/**
@@ -1298,5 +1302,10 @@ static void __attribute__((constructor)) _spdk_bdev_module_register_##name(void)
 } \
 
 #endif /* __SPDK_BDEV_MODULE_ONLY */
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif /* SPDK_BDEV_MODULE_H */
