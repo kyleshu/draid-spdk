@@ -34,7 +34,7 @@
 SPDK_ROOT_DIR := $(abspath $(CURDIR)/../..)
 include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
 
-DIRS-y += delay error gpt lvol malloc null nvme passthru raid split zone_block
+DIRS-y += delay error gpt lvol malloc null nvme passthru split zone_block #raid
 
 DIRS-$(CONFIG_CRYPTO) += crypto
 
