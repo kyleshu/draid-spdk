@@ -5827,14 +5827,18 @@ bdev_register_finished(void *arg)
 int
 spdk_bdev_register(struct spdk_bdev *bdev)
 {
+    SPDK_NOTICELOG("before bdev_register\n");
 	int rc = bdev_register(bdev);
-
+    SPDK_NOTICELOG("after bdev_register\n");
 	if (rc == 0) {
-		/* Examine configuration before initializing I/O */
+        SPDK_NOTICELOG("before bdev_examine\n");
+        /* Examine configuration before initializing I/O */
 		bdev_examine(bdev);
 
+        SPDK_NOTICELOG("before spdk_bdev_wait_for_examine\n");
 		spdk_bdev_wait_for_examine(bdev_register_finished, bdev);
 	}
+    SPDK_NOTICELOG("after spdk_bdev_wait_for_examine\n");
 
 	return rc;
 }
