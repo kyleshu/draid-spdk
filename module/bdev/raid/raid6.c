@@ -293,8 +293,8 @@ raid5_memset_iovs(struct iovec *iovs, int iovcnt, char c)
 
 static void
 raid5_memcpy_iovs(struct iovec *iovs_dest, int iovs_dest_cnt, size_t iovs_dest_offset,
-               const struct iovec *iovs_src, int iovs_src_cnt, size_t iovs_src_offset,
-               size_t size)
+                  const struct iovec *iovs_src, int iovs_src_cnt, size_t iovs_src_offset,
+                  size_t size)
 {
     struct iovec *v1;
     const struct iovec *v2;
@@ -879,7 +879,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
     uint64_t len;
 
     // Note: check if any degraded device is involved
-     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
+    FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
         if (chunk->req_blocks > 0) {
             base_info = &raid_bdev->base_bdev_info[chunk->index];
             if (base_info->degraded) { //Note: assuming raid5, at most 1 degraded
@@ -887,7 +887,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
                 break;
             }
         }
-    }   
+    }
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
         SPDK_NOTICELOG("reconstructed read start\n");
@@ -928,7 +928,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
             } else if (chunk->req_blocks && chunk != d_chunk) {
                 raid5_submit_chunk_request(chunk, CHUNK_READ);
             }
-        }        
+        }
     } else {
         stripe_req->chunk_requests_complete_cb = raid5_complete_stripe_request;
         FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
@@ -940,7 +940,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
                 }
                 raid5_submit_chunk_request(chunk, CHUNK_READ);
             }
-        }       
+        }
     }
 }
 

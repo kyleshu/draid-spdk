@@ -36,10 +36,13 @@
 
 #include "spdk/bdev_module.h"
 
+#define RAID_MAX_STRIPES 1024 /* TODO: make configurable */
+
 enum raid_level {
 	INVALID_RAID_LEVEL	= -1,
 	RAID0			= 0,
 	RAID5			= 5,
+    RAID6           = 6,
 };
 
 /*
