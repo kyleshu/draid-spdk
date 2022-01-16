@@ -30,7 +30,7 @@ main(int argc, char **argv)
         memset(data2[i], 0, data_size);
     }
 
-    int ret = pq_gen(base_devs, data_size, data);
+    ret = pq_gen(base_devs, data_size, (void **) data);
     assert(ret == 0);
 
     return 0;
