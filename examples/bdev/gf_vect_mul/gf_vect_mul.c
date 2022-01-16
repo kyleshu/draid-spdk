@@ -14,9 +14,13 @@ main(int argc, char **argv)
     char data2[base_devs][data_size];
     int ret;
 
+    printf("start\n");
+
     for (i = 0; i < base_devs - 2; i++) {
         gf_vect_mul_init(i, gf_const_tbl_arr[i]);
     }
+
+    printf("gf_vect_mul_init\n");
 
     for (i = 0; i < base_devs - 2; i++) {
         for (j = 0; j < data_size; j++) {
@@ -29,6 +33,8 @@ main(int argc, char **argv)
         memset(data[i], 0, data_size);
         memset(data2[i], 0, data_size);
     }
+
+    printf("memset\n");
 
     ret = pq_gen(base_devs, data_size, (void **) data);
     assert(ret == 0);
