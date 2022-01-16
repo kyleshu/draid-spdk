@@ -2,6 +2,8 @@
 #include "isa-l/include/gf_vect_mul.h"
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 int
 main(int argc, char **argv)
@@ -13,6 +15,7 @@ main(int argc, char **argv)
     char data[base_devs][data_size];
     char data2[base_devs][data_size];
     int ret;
+    char tmp;
 
     printf("start\n");
 
@@ -23,10 +26,9 @@ main(int argc, char **argv)
     printf("gf_vect_mul_init\n");
 
     for (i = 0; i < base_devs - 2; i++) {
-        for (j = 0; j < data_size; j++) {
-            data[i][j] = (char) rand();
-        }
-        memcpy(data2[i], data[i], data_size);
+        tmp = rand();
+        memset(data[i], tmp, data_size);
+        memset(data2[i], tmp, data_size);
     }
 
     for (i = base_devs - 2; i < base_devs; i++) {
