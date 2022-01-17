@@ -8,7 +8,7 @@
 #include<stdlib.h>
 #include<limits.h>
 
-#define TEST_SOURCES 16
+#define TEST_SOURCES 14
 #define TEST_LEN     4096
 #define TEST_MEM ((TEST_SOURCES + 2)*(TEST_LEN))
 #ifndef TEST_SEED
@@ -39,10 +39,10 @@ int dump(unsigned char *buf, int len)
 int
 main(int argc, char **argv)
 {
-    uint8_t gf_const_tbl_arr[base_devs][32];
+    uint8_t gf_const_tbl_arr[TEST_SOURCES][32];
 
-    for (i = 0; i < TEST_SOURCES; i++) {
-        gf_vect_mul_init(i, gf_const_tbl_arr[i]);
+    for (int a = 0; a < TEST_SOURCES; a++) {
+        gf_vect_mul_init(i, gf_const_tbl_arr[a]);
     }
 
     int i, j, k, ret, fail = 0;
