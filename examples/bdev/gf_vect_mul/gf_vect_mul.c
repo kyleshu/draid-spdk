@@ -223,7 +223,7 @@ main(int argc, char **argv)
 
     if (fail > 0) {
         int t;
-        printf(" Fail rand test1 fail=%d, ret=%d\n", fail, ret);
+        printf(" Fail block test fail=%d, ret=%d\n", fail, ret);
         for (t = 0; t < TEST_SOURCES + 2; t++)
             dump(buffs2[t], 15);
 
