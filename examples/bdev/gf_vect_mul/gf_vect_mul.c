@@ -52,7 +52,7 @@ int
 main(int argc, char **argv)
 {
     unsigned char gf_const_tbl_arr[255][32];
-    int i, j, k, ret, fail = 0;
+    int i, j, ret, fail = 0;
     void *buffs[TEST_SOURCES + 2];	// Pointers to src and dest
     void *buffs2[TEST_SOURCES + 2];
     void *tmp_buf[TEST_SOURCES + 2];
