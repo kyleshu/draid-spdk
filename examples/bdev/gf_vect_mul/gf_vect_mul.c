@@ -132,11 +132,32 @@ main(int argc, char **argv)
         putchar('.');
 
     // Test rand1
-    for (i = 0; i < TEST_SOURCES + 2; i++)
+    for (i = 0; i < TEST_SOURCES; i++) {
         rand_buffer(buffs[i], TEST_LEN);
+    }
+    memset(buffs[TEST_SOURCES], 0, TEST_LEN);
+    memset(buffs[TEST_SOURCES + 1], 0, TEST_LEN);
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(buffs2[i], 0, TEST_LEN);
+    }
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    memcpy(buffs2[TEST_SOURCES], buffs[0], TEST_LEN);
+    for (i = 1; i < TEST_SOURCES; i++) {
+        xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
+    }
+    for (i = 0; i < TEST_SOURCES; i++) {
+        gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
+    }
+    memcpy(buffs2[TEST_SOURCES + 1], buffs2[0], TEST_LEN);
+    for (i = 1; i < TEST_SOURCES; i++) {
+        xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
+    }
+
     fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs);
+    fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs2);
 
     if (fail > 0) {
         int t;
