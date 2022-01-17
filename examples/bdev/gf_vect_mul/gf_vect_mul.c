@@ -104,7 +104,7 @@ main(int argc, char **argv)
     }
     memcpy(buffs2[TEST_SOURCES + 1], buffs2[0], TEST_LEN);
     for (i = 1; i < TEST_SOURCES; i++) {
-        xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
+        xor_buf(buffs2[TEST_SOURCES + 1], buffs2[i], TEST_LEN);
     }
 
     for (i = 0; i < TEST_LEN; i++) {
@@ -153,7 +153,7 @@ main(int argc, char **argv)
     }
     memcpy(buffs2[TEST_SOURCES + 1], buffs2[0], TEST_LEN);
     for (i = 1; i < TEST_SOURCES; i++) {
-        xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
+        xor_buf(buffs2[TEST_SOURCES + 1], buffs2[i], TEST_LEN);
     }
 
     for (i = 0; i < TEST_SOURCES; i++) {
