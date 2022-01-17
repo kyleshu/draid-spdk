@@ -156,7 +156,7 @@ main(int argc, char **argv)
         xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
     }
 
-    for (i = 1; i < TEST_SOURCES; i++) {
+    for (i = 0; i < TEST_SOURCES; i++) {
         memcpy(buffs2[i], buffs[i], TEST_LEN);
     }
 
