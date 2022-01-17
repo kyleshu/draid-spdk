@@ -41,8 +41,8 @@ main(int argc, char **argv)
 {
     uint8_t gf_const_tbl_arr[TEST_SOURCES][32];
 
-    for (int a = 0; a < TEST_SOURCES; a++) {
-        gf_vect_mul_init(i, gf_const_tbl_arr[a]);
+    for (uint8_t a = 0; a < TEST_SOURCES; a++) {
+        gf_vect_mul_init(a, gf_const_tbl_arr[a]);
     }
 
     int i, j, k, ret, fail = 0;
