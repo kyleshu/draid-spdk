@@ -163,7 +163,7 @@ main(int argc, char **argv)
         int t;
         printf(" Fail rand test1 fail=%d, ret=%d\n", fail, ret);
         for (t = 0; t < TEST_SOURCES + 2; t++)
-            dump(buffs[t], 15);
+            dump(buffs2[t], 15);
 
         printf(" reference function p,q\n");
         pq_gen_base(TEST_SOURCES + 2, TEST_LEN, buffs);
