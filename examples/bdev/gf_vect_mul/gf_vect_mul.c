@@ -52,19 +52,18 @@ int
 main(int argc, char **argv)
 {
     unsigned char gf_const_tbl_arr[255][32];
-
-    for (int a = 0; a < 255; a++) {
-        unsigned char c = 1;
-        for (int b = 0; b < a; b++) {
-            c = gf_mul(c, 2);
-        }
-        gf_vect_mul_init(c, gf_const_tbl_arr[a]);
-    }
-
     int i, j, k, ret, fail = 0;
     void *buffs[TEST_SOURCES + 2];	// Pointers to src and dest
     void *buffs2[TEST_SOURCES + 2];
-    char *tmp_buf[TEST_SOURCES + 2];
+    void *tmp_buf[TEST_SOURCES + 2];
+
+    for (i = 0; i < 255; i++) {
+        unsigned char c = 1;
+        for (j = 0; j < i; j++) {
+            c = gf_mul(c, 2);
+        }
+        gf_vect_mul_init(c, gf_const_tbl_arr[i]);
+    }
 
     printf("Test pq_gen_test\n");
 
@@ -85,12 +84,19 @@ main(int argc, char **argv)
             return 1;
         }
         buffs2[i] = buf;
+        ret = posix_memalign(&buf, 32, TEST_LEN);
+        if (ret) {
+            printf("alloc error: Fail\n");
+            return 1;
+        }
+        tmp_buf[i] = buf;
     }
 
     // Test of all zeros
     for (i = 0; i < TEST_SOURCES + 2; i++) {
         memset(buffs[i], 0, TEST_LEN);
         memset(buffs2[i], 0, TEST_LEN);
+        memset(tmp_buf[i], 0, TEST_LEN);
     }
     pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
@@ -275,6 +281,70 @@ main(int argc, char **argv)
     fflush(0);
 
     // Test D+D
+    for (i = 0; i < TEST_SOURCES; i++) {
+        rand_buffer(buffs[i], TEST_LEN);
+    }
+    memset(buffs[TEST_SOURCES], 0, TEST_LEN);
+    memset(buffs[TEST_SOURCES + 1], 0, TEST_LEN);
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(buffs2[i], 0, TEST_LEN);
+    }
+
+    ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    for (i = 0; i < TEST_SOURCES; i++) {
+        gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
+    }
+
+    for (i = 0; i < TEST_SOURCES; i++) {
+        if (i == 3 || i == 8) {
+            continue;
+        }
+        xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
+        xor_buf(buffs2[TEST_SOURCES + 1], buffs2[i], TEST_LEN);
+    }
+    xor_buf(buffs2[TEST_SOURCES], buffs[TEST_SOURCES], TEST_LEN);
+    xor_buf(buffs2[TEST_SOURCES + 1], buffs[TEST_SOURCES + 1], TEST_LEN);
+
+    unsigned char g_y_minus_x = 1;
+    unsigned char g_minus_x = 1;
+    for (i = 0; i < 8 - 3; i++) {
+        g_y_minus_x = gf_mul(g_y_minus_x, 2);
+    }
+    for (i = 0; i < 255 - 3; i++) {
+        g_minus_x = gf_mul(g_minus_x, 2);
+    }
+    unsigned char a = gf_mul(g_y_minus_x, gf_inv(g_y_minus_x ^ 1));
+    unsigned char b = gf_mul(g_minus_x, gf_inv(g_y_minus_x ^ 1));
+    unsigned char gf_const_tbl_a[32];
+    unsigned char gf_const_tbl_b[32];
+    gf_vect_mul_init(a, gf_const_tbl_a);
+    gf_vect_mul_init(b, gf_const_tbl_b);
+
+    gf_vect_mul(TEST_LEN, gf_const_tbl_a, buffs2[TEST_SOURCES], tmp_buf[3]);
+    gf_vect_mul(TEST_LEN, gf_const_tbl_b, buffs2[TEST_SOURCES + 1], buffs2[3]);
+    xor_buf(buffs2[3], tmp_buf[3], TEST_LEN);
+
+    memcpy(buffs2[8], buffs2[3], TEST_LEN);
+    xor_buf(buffs2[8], buffs2[TEST_SOURCES], TEST_LEN);
+
+    for (i = 0; i < TEST_LEN; i++) {
+        if (((char *)buffs[3])[i] != ((char *)buffs2[3])[i]) {
+            fail++;
+        }
+        if (((char *)buffs[8])[i] != ((char *)buffs2[8])[i]) {
+            fail++;
+        }
+    }
+
+    if (fail > 0) {
+        printf("fail d+d test %d\n", fail);
+        return 1;
+    } else
+        putchar('.');
+
+    fflush(0);
 
 
     if (!fail)
