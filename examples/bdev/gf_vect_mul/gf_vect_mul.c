@@ -130,6 +130,8 @@ main(int argc, char **argv)
     } else
         putchar('.');
 
+    fflush(0);
+
     // Test rand
     for (i = 0; i < TEST_SOURCES; i++) {
         rand_buffer(buffs[i], TEST_LEN);
@@ -143,15 +145,13 @@ main(int argc, char **argv)
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-    memcpy(buffs2[TEST_SOURCES], buffs[0], TEST_LEN);
-    for (i = 1; i < TEST_SOURCES; i++) {
+    for (i = 0; i < TEST_SOURCES; i++) {
         xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
     }
     for (i = 0; i < TEST_SOURCES; i++) {
         gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
     }
-    memcpy(buffs2[TEST_SOURCES + 1], buffs2[0], TEST_LEN);
-    for (i = 1; i < TEST_SOURCES; i++) {
+    for (i = 0; i < TEST_SOURCES; i++) {
         xor_buf(buffs2[TEST_SOURCES + 1], buffs2[i], TEST_LEN);
     }
 
@@ -192,9 +192,6 @@ main(int argc, char **argv)
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-//    for (j = 0; j < TEST_LEN; j += 512) {
-//        memcpy(&buffs2[TEST_SOURCES][j], &buffs[0][j], 512);
-//    }
     for (i = 0; i < TEST_SOURCES; i++) {
         for (j = 0; j < TEST_LEN; j += 512) {
             xor_buf(&buffs2[TEST_SOURCES][j], &buffs[i][j], 512);
@@ -205,9 +202,6 @@ main(int argc, char **argv)
             gf_vect_mul(512, gf_const_tbl_arr[i], &buffs[i][j], &buffs2[i][j]);
         }
     }
-//    for (j = 0; j < TEST_LEN; j += 512) {
-//        memcpy(&buffs2[TEST_SOURCES + 1][j], &buffs2[0][j], 512);
-//    }
     for (i = 0; i < TEST_SOURCES; i++) {
         for (j = 0; j < TEST_LEN; j += 512) {
             xor_buf(&buffs2[TEST_SOURCES + 1][j], &buffs2[i][j], 512);
@@ -252,7 +246,33 @@ main(int argc, char **argv)
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-    // compute q*q_x
+    for (i = 0; i < TEST_SOURCES; i++) {
+        gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
+    }
+
+    for (i = 0; i < TEST_SOURCES; i++) {
+        if (i == 3) {
+            continue;
+        }
+        xor_buf(buffs2[TEST_SOURCES + 1], buffs2[i], TEST_LEN);
+    }
+    xor_buf(buffs2[TEST_SOURCES + 1], buffs[TEST_SOURCES + 1], TEST_LEN);
+
+    gf_vect_mul(TEST_LEN, gf_const_tbl_arr[255-3], buffs2[TEST_SOURCES + 1], buffs2[3]);
+
+    for (i = 0; i < TEST_LEN; i++) {
+        if (((char *)buffs[3])[i] != ((char *)buffs2[3])[i]) {
+            fail++;
+        }
+    }
+
+    if (fail > 0) {
+        printf("fail d+p test %d\n", fail);
+        return 1;
+    } else
+        putchar('.');
+
+    fflush(0);
 
     // Test D+D
 
