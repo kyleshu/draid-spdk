@@ -94,7 +94,6 @@ main(int argc, char **argv)
     }
     pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-
     memcpy(buffs2[TEST_SOURCES], buffs[0], TEST_LEN);
     for (i = 1; i < TEST_SOURCES; i++) {
         xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
@@ -131,7 +130,7 @@ main(int argc, char **argv)
     } else
         putchar('.');
 
-    // Test rand1
+    // Test rand
     for (i = 0; i < TEST_SOURCES; i++) {
         rand_buffer(buffs[i], TEST_LEN);
     }
@@ -178,64 +177,72 @@ main(int argc, char **argv)
     } else
         putchar('.');
 
-    // Test various number of sources
-    for (j = 4; j <= TEST_SOURCES + 2; j++) {
-        for (i = 0; i < j; i++)
-            rand_buffer(buffs[i], TEST_LEN);
+    fflush(0);
 
-        pq_gen(j, TEST_LEN, buffs);
-        fail |= pq_check_base(j, TEST_LEN, buffs);
-
-        if (fail > 0) {
-            printf("fail rand test %d sources\n", j);
-            return 1;
-        } else
-            putchar('.');
+    // Test blocks
+    for (i = 0; i < TEST_SOURCES; i++) {
+        rand_buffer(buffs[i], TEST_LEN);
     }
+    memset(buffs[TEST_SOURCES], 0, TEST_LEN);
+    memset(buffs[TEST_SOURCES + 1], 0, TEST_LEN);
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(buffs2[i], 0, TEST_LEN);
+    }
+
+    ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    for (j = 0; j < TEST_LEN; j += 512) {
+        memcpy(&buffs2[TEST_SOURCES][j], &buffs[0][j], 512);
+    }
+    for (i = 1; i < TEST_SOURCES; i++) {
+        for (j = 0; j < TEST_LEN; j += 512) {
+            xor_buf(&buffs2[TEST_SOURCES][j], &buffs[i][j], 512);
+        }
+    }
+    for (i = 0; i < TEST_SOURCES; i++) {
+        for (j = 0; j < TEST_LEN; j += 512) {
+            gf_vect_mul(512, gf_const_tbl_arr[i], &buffs[i][j], &buffs2[i][j]);
+        }
+    }
+    for (j = 0; j < TEST_LEN; j += 512) {
+        memcpy(&buffs2[TEST_SOURCES + 1][j], &buffs2[0][j], 512);
+    }
+    for (i = 1; i < TEST_SOURCES; i++) {
+        for (j = 0; j < TEST_LEN; j += 512) {
+            xor_buf(&buffs2[TEST_SOURCES + 1][j], &buffs2[i][j], 512);
+        }
+    }
+
+    for (i = 0; i < TEST_SOURCES; i++) {
+        memcpy(buffs2[i], buffs[i], TEST_LEN);
+    }
+
+    fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs);
+    fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs2);
+
+    if (fail > 0) {
+        int t;
+        printf(" Fail rand test1 fail=%d, ret=%d\n", fail, ret);
+        for (t = 0; t < TEST_SOURCES + 2; t++)
+            dump(buffs2[t], 15);
+
+        printf(" reference function p,q\n");
+        pq_gen_base(TEST_SOURCES + 2, TEST_LEN, buffs);
+        for (t = TEST_SOURCES; t < TEST_SOURCES + 2; t++)
+            dump(buffs[t], 15);
+
+        return 1;
+    } else
+        putchar('.');
 
     fflush(0);
 
-    // Test various number of sources and len
-    k = 0;
-    while (k <= TEST_LEN) {
-        for (j = 4; j <= TEST_SOURCES + 2; j++) {
-            for (i = 0; i < j; i++)
-                rand_buffer(buffs[i], k);
 
-            ret = pq_gen(j, k, buffs);
-            fail |= pq_check_base(j, k, buffs);
+    // Test D+P
 
-            if (fail > 0) {
-                printf("fail rand test %d sources, len=%d, fail="
-                       "%d, ret=%d\n", j, k, fail, ret);
-                return 1;
-            }
-        }
-        putchar('.');
-        k += 32;
-    }
+    // Test D+D
 
-    // Test at the end of buffer
-    k = 0;
-    while (k <= TEST_LEN) {
-        for (j = 0; j < (TEST_SOURCES + 2); j++) {
-            rand_buffer(buffs[j], TEST_LEN - k);
-            tmp_buf[j] = (char *)buffs[j] + k;
-        }
-
-        ret = pq_gen(TEST_SOURCES + 2, TEST_LEN - k, (void *)tmp_buf);
-        fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN - k, (void *)tmp_buf);
-
-        if (fail > 0) {
-            printf("fail end test - offset: %d, len: %d, fail: %d, "
-                   "ret: %d\n", k, TEST_LEN - k, fail, ret);
-            return 1;
-        }
-
-        putchar('.');
-        fflush(0);
-        k += 32;
-    }
 
     if (!fail)
         printf(" done: Pass\n");
