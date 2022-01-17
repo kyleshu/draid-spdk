@@ -51,9 +51,9 @@ void xor_buf(void *restrict to, void *restrict from, size_t size)
 int
 main(int argc, char **argv)
 {
-    unsigned char gf_const_tbl_arr[TEST_SOURCES][32];
+    unsigned char gf_const_tbl_arr[255][32];
 
-    for (int a = 0; a < TEST_SOURCES; a++) {
+    for (int a = 0; a < 255; a++) {
         unsigned char c = 1;
         for (int b = 0; b < a; b++) {
             c = gf_mul(c, 2);
@@ -192,10 +192,10 @@ main(int argc, char **argv)
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-    for (j = 0; j < TEST_LEN; j += 512) {
-        memcpy(&buffs2[TEST_SOURCES][j], &buffs[0][j], 512);
-    }
-    for (i = 1; i < TEST_SOURCES; i++) {
+//    for (j = 0; j < TEST_LEN; j += 512) {
+//        memcpy(&buffs2[TEST_SOURCES][j], &buffs[0][j], 512);
+//    }
+    for (i = 0; i < TEST_SOURCES; i++) {
         for (j = 0; j < TEST_LEN; j += 512) {
             xor_buf(&buffs2[TEST_SOURCES][j], &buffs[i][j], 512);
         }
@@ -205,10 +205,10 @@ main(int argc, char **argv)
             gf_vect_mul(512, gf_const_tbl_arr[i], &buffs[i][j], &buffs2[i][j]);
         }
     }
-    for (j = 0; j < TEST_LEN; j += 512) {
-        memcpy(&buffs2[TEST_SOURCES + 1][j], &buffs2[0][j], 512);
-    }
-    for (i = 1; i < TEST_SOURCES; i++) {
+//    for (j = 0; j < TEST_LEN; j += 512) {
+//        memcpy(&buffs2[TEST_SOURCES + 1][j], &buffs2[0][j], 512);
+//    }
+    for (i = 0; i < TEST_SOURCES; i++) {
         for (j = 0; j < TEST_LEN; j += 512) {
             xor_buf(&buffs2[TEST_SOURCES + 1][j], &buffs2[i][j], 512);
         }
@@ -240,6 +240,19 @@ main(int argc, char **argv)
 
 
     // Test D+P
+    for (i = 0; i < TEST_SOURCES; i++) {
+        rand_buffer(buffs[i], TEST_LEN);
+    }
+    memset(buffs[TEST_SOURCES], 0, TEST_LEN);
+    memset(buffs[TEST_SOURCES + 1], 0, TEST_LEN);
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(buffs2[i], 0, TEST_LEN);
+    }
+
+    ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    // compute q*q_x
 
     // Test D+D
 
