@@ -36,21 +36,21 @@ int dump(unsigned char *buf, int len)
     return 0;
 }
 
-xor_buf(void *restrict to, void *restrict from, size_t size)
+void xor_buf(void *restrict to, void *restrict from, size_t size)
 {
     int ret;
     void *vects[3] = { from, to, to };
 
     ret = xor_gen(3, size, vects);
     if (ret) {
-        SPDK_ERRLOG("xor_gen failed\n");
+        printf("xor_gen failed\n");
     }
 }
 
 int
 main(int argc, char **argv)
 {
-    uint8_t gf_const_tbl_arr[TEST_SOURCES][32];
+    unsigned char gf_const_tbl_arr[TEST_SOURCES][32];
 
     for (uint8_t a = 0; a < TEST_SOURCES; a++) {
         gf_vect_mul_init(a, gf_const_tbl_arr[a]);
@@ -93,10 +93,9 @@ main(int argc, char **argv)
     memcpy(buffs2[TEST_SOURCES], buffs[0], TEST_LEN);
     for (i = 1; i < TEST_SOURCES; i++) {
         xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
-        gf_vect_mul(TEST_LEN, gf_const_tbl[i], buffs[i], buffs2[i]);
     }
     for (i = 0; i < TEST_SOURCES; i++) {
-        gf_vect_mul(TEST_LEN, gf_const_tbl[i], buffs[i], buffs2[i]);
+        gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
     }
     memcpy(buffs2[TEST_SOURCES], buffs2[0], TEST_LEN);
     for (i = 0; i < TEST_SOURCES; i++) {
