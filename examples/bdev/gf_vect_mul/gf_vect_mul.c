@@ -156,6 +156,10 @@ main(int argc, char **argv)
         xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
     }
 
+    for (i = 1; i < TEST_SOURCES; i++) {
+        memcpy(buffs2[i], buffs[i], TEST_LEN);
+    }
+
     fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs);
     fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs2);
 
