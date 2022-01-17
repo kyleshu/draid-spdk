@@ -36,6 +36,17 @@ int dump(unsigned char *buf, int len)
     return 0;
 }
 
+xor_buf(void *restrict to, void *restrict from, size_t size)
+{
+    int ret;
+    void *vects[3] = { from, to, to };
+
+    ret = xor_gen(3, size, vects);
+    if (ret) {
+        SPDK_ERRLOG("xor_gen failed\n");
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -47,6 +58,7 @@ main(int argc, char **argv)
 
     int i, j, k, ret, fail = 0;
     void *buffs[TEST_SOURCES + 2];	// Pointers to src and dest
+    void *buffs2[TEST_SOURCES + 2];
     char *tmp_buf[TEST_SOURCES + 2];
 
     printf("Test pq_gen_test\n");
@@ -62,22 +74,45 @@ main(int argc, char **argv)
             return 1;
         }
         buffs[i] = buf;
+        ret = posix_memalign(&buf, 32, TEST_LEN);
+        if (ret) {
+            printf("alloc error: Fail\n");
+            return 1;
+        }
+        buffs2[i] = buf;
     }
 
     // Test of all zeros
-    for (i = 0; i < TEST_SOURCES + 2; i++)
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
         memset(buffs[i], 0, TEST_LEN);
-
+        memset(buffs2[i], 0, TEST_LEN);
+    }
     pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
 
-    for (i = 0; i < TEST_LEN; i++) {
-        if (((char *)buffs[TEST_SOURCES])[i] != 0)
-            fail++;
+
+    memcpy(buffs2[TEST_SOURCES], buffs[0], TEST_LEN);
+    for (i = 1; i < TEST_SOURCES; i++) {
+        xor_buf(buffs2[TEST_SOURCES], buffs[i], TEST_LEN);
+        gf_vect_mul(TEST_LEN, gf_const_tbl[i], buffs[i], buffs2[i]);
+    }
+    for (i = 0; i < TEST_SOURCES; i++) {
+        gf_vect_mul(TEST_LEN, gf_const_tbl[i], buffs[i], buffs2[i]);
+    }
+    memcpy(buffs2[TEST_SOURCES], buffs2[0], TEST_LEN);
+    for (i = 0; i < TEST_SOURCES; i++) {
+        xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
     }
 
     for (i = 0; i < TEST_LEN; i++) {
-        if (((char *)buffs[TEST_SOURCES + 1])[i] != 0)
+        if (((char *)buffs[TEST_SOURCES])[i] != 0) {
             fail++;
+        }
+    }
+
+    for (i = 0; i < TEST_LEN; i++) {
+        if (((char *)buffs[TEST_SOURCES + 1])[i] != 0) {
+            fail++;
+        }
     }
 
     if (fail > 0) {
