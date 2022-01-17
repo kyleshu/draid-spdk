@@ -1,5 +1,6 @@
 #include "isa-l/include/raid.h"
 #include "isa-l/include/gf_vect_mul.h"
+#include "isa-l/include/erasure_code.h"
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
 #include<stdio.h>
@@ -52,8 +53,12 @@ main(int argc, char **argv)
 {
     unsigned char gf_const_tbl_arr[TEST_SOURCES][32];
 
-    for (uint8_t a = 0; a < TEST_SOURCES; a++) {
-        gf_vect_mul_init(a, gf_const_tbl_arr[a]);
+    for (int a = 0; a < TEST_SOURCES; a++) {
+        unsigned char c = 1;
+        for (int b = 0; b < a; b++) {
+            c = gf_mul(c, 2);
+        }
+        gf_vect_mul_init(c, gf_const_tbl_arr[a]);
     }
 
     int i, j, k, ret, fail = 0;
@@ -97,8 +102,8 @@ main(int argc, char **argv)
     for (i = 0; i < TEST_SOURCES; i++) {
         gf_vect_mul(TEST_LEN, gf_const_tbl_arr[i], buffs[i], buffs2[i]);
     }
-    memcpy(buffs2[TEST_SOURCES], buffs2[0], TEST_LEN);
-    for (i = 0; i < TEST_SOURCES; i++) {
+    memcpy(buffs2[TEST_SOURCES + 1], buffs2[0], TEST_LEN);
+    for (i = 1; i < TEST_SOURCES; i++) {
         xor_buf(buffs2[TEST_SOURCES], buffs2[i], TEST_LEN);
     }
 
@@ -106,10 +111,16 @@ main(int argc, char **argv)
         if (((char *)buffs[TEST_SOURCES])[i] != 0) {
             fail++;
         }
+        if (((char *)buffs[TEST_SOURCES])[i] != ((char *)buffs2[TEST_SOURCES])[i]) {
+            fail++;
+        }
     }
 
     for (i = 0; i < TEST_LEN; i++) {
         if (((char *)buffs[TEST_SOURCES + 1])[i] != 0) {
+            fail++;
+        }
+        if (((char *)buffs[TEST_SOURCES + 1])[i] != ((char *)buffs2[TEST_SOURCES + 1])[i]) {
             fail++;
         }
     }
