@@ -240,7 +240,7 @@ raid6_gf_mul(unsigned char *gf_const_tbl, void *to, void *from, size_t size) {
 
 static void
 raid6_q_gen(struct raid6_info* r6info, uint8_t index, void *to, void *from, size_t size) {
-    unsigned char gf_const_tbl = r6info->gf_const_tbl_arr[index];
+    unsigned char *gf_const_tbl = r6info->gf_const_tbl_arr[index];
     gf_vect_mul(size, gf_const_tbl, from, to);
 }
 
@@ -767,11 +767,11 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
     int preread_iovcnt;
     struct iovec iov0 = {
             .iov_base = d_chunk_buf,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
     struct iovec iov1 = {
             .iov_base = tmp_buf0,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
 
     SPDK_NOTICELOG("reconstructed read complete\n");
@@ -864,19 +864,19 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
     void *tmp_buf1 = stripe_req->stripe->tmp_buffers[1];
     struct iovec iov_x = {
             .iov_base = d_chunk_buf_x,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
     struct iovec iov_y = {
             .iov_base = d_chunk_buf_y,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
     struct iovec iov_tmp0 = {
             .iov_base = tmp_buf0,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
     struct iovec iov_tmp1 = {
             .iov_base = tmp_buf1,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
 
     SPDK_NOTICELOG("reconstructed read complete\n");
@@ -1082,12 +1082,12 @@ raid6_stripe_write_preread_complete_rmw(struct stripe_request *stripe_req)
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
     struct raid6_info *r6info = raid_bdev->module_private;
+    uint32_t blocklen = raid_bdev->bdev.blocklen;
     void *tmp_buf = stripe_req->stripe->tmp_buffers[0];
     struct iovec iov = {
             .iov_base = tmp_buf,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
-    uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
     int ret;
 
     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
@@ -1145,12 +1145,12 @@ raid6_stripe_write_preread_complete(struct stripe_request *stripe_req)
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
     struct raid6_info *r6info = raid_bdev->module_private;
+    uint32_t blocklen = raid_bdev->bdev.blocklen;
     void *tmp_buf = stripe_req->stripe->tmp_buffers[0];
     struct iovec iov = {
             .iov_base = tmp_buf,
-            .iov_len = raid_bdev->strip_size << raid_bdev->blocklen_shift,
+            .iov_len = raid_bdev->strip_size * blocklen,
     };
-    uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
     int ret = 0;
 
     raid6_memset_iovs(p_chunk->iovs, p_chunk->iovcnt, 0);
