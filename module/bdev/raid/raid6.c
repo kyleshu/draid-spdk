@@ -1827,6 +1827,7 @@ raid6_start(struct raid_bdev *raid_bdev)
         return -ENOMEM;
     }
 
+    SPDK_NOTICELOG("Initialize gf_const_tbl_arr \n");
     for (int i = 0; i < 256; i++) {
         unsigned char c = 1;
         unsigned char a;
@@ -1847,6 +1848,7 @@ raid6_start(struct raid_bdev *raid_bdev)
         gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
 
     }
+    SPDK_NOTICELOG("Initialize gf_const_tbl_arr successfully\n");
 
     r6info->raid_bdev = raid_bdev;
 
