@@ -1875,12 +1875,12 @@ raid6_start(struct raid_bdev *raid_bdev)
     }
 
     TAILQ_INIT(&r6info->free_stripes);
-    SPDK_NOTICELOG("Can we reach here?2\n");
+    SPDK_NOTICELOG("Can we reach here2?\n");
     for (i = 0; i < RAID_MAX_STRIPES; i++) {
         struct stripe *stripe = &r6info->stripes[i];
 
         ret = raid6_stripe_init(stripe, raid_bdev);
-        SPDK_NOTICELOG("Can we reach here?3\n");
+        SPDK_NOTICELOG("Can we reach her3?%u\n", i);
         if (ret) {
             for (; i > 0; --i) {
                 raid6_stripe_deinit(&r6info->stripes[i], raid_bdev);
@@ -1905,7 +1905,7 @@ raid6_start(struct raid_bdev *raid_bdev)
         ret = -ENOMEM;
         goto out;
     }
-
+    SPDK_NOTICELOG("Can we reach here4?\n");
     snprintf(name_buf, sizeof(name_buf), "raid6_hash_%p", raid_bdev);
 
     hash_params.name = name_buf;
@@ -1918,7 +1918,7 @@ raid6_start(struct raid_bdev *raid_bdev)
         ret = -ENOMEM;
         goto out;
     }
-
+    SPDK_NOTICELOG("Can we reach here5?\n");
     TAILQ_INIT(&r6info->active_stripes);
 
     raid_bdev->module_private = r6info;
@@ -1926,6 +1926,7 @@ raid6_start(struct raid_bdev *raid_bdev)
     if (ret) {
         raid6_free(r6info);
     }
+    SPDK_NOTICELOG("Can we reach here6?\n");
     return ret;
 }
 
