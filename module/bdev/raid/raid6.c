@@ -125,8 +125,6 @@ struct stripe {
 
     /* Array of buffers for chunk parity/preread data */
     void **chunk_buffers;
-
-    void **tmp_buffers;
 };
 
 struct raid6_info {
@@ -761,7 +759,7 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
     uint32_t blocklen = raid_bdev->bdev.blocklen;
     struct raid6_info *r6info = raid_bdev->module_private;
     void *d_chunk_buf = stripe_req->stripe->chunk_buffers[d_chunk->index];
-    void *tmp_buf0 = stripe_req->stripe->tmp_buffers[0];
+    void *tmp_buf0 = stripe_req->stripe->chunk_buffers[raid_bdev->num_base_bdevs];
     size_t src_offset;
     uint64_t len;
     struct iovec *preread_iovs;
@@ -862,8 +860,8 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
 
     void *d_chunk_buf_x = stripe_req->stripe->chunk_buffers[d_chunk_x->index];
     void *d_chunk_buf_y = stripe_req->stripe->chunk_buffers[d_chunk_y->index];
-    void *tmp_buf0 = stripe_req->stripe->tmp_buffers[0];
-    void *tmp_buf1 = stripe_req->stripe->tmp_buffers[1];
+    void *tmp_buf0 = stripe_req->stripe->chunk_buffers[raid_bdev->num_base_bdevs];
+    void *tmp_buf1 = stripe_req->stripe->chunk_buffers[raid_bdev->num_base_bdevs + 1];
     struct iovec iov_x = {
             .iov_base = d_chunk_buf_x,
             .iov_len = raid_bdev->strip_size * blocklen,
@@ -1085,7 +1083,7 @@ raid6_stripe_write_preread_complete_rmw(struct stripe_request *stripe_req)
     struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
     struct raid6_info *r6info = raid_bdev->module_private;
     uint32_t blocklen = raid_bdev->bdev.blocklen;
-    void *tmp_buf = stripe_req->stripe->tmp_buffers[0];
+    void *tmp_buf = stripe_req->stripe->chunk_buffers[raid_bdev->num_base_bdevs];
     struct iovec iov = {
             .iov_base = tmp_buf,
             .iov_len = raid_bdev->strip_size * blocklen,
@@ -1148,7 +1146,7 @@ raid6_stripe_write_preread_complete(struct stripe_request *stripe_req)
     struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
     struct raid6_info *r6info = raid_bdev->module_private;
     uint32_t blocklen = raid_bdev->bdev.blocklen;
-    void *tmp_buf = stripe_req->stripe->tmp_buffers[0];
+    void *tmp_buf = stripe_req->stripe->chunk_buffers[raid_bdev->num_base_bdevs];
     struct iovec iov = {
             .iov_base = tmp_buf,
             .iov_len = raid_bdev->strip_size * blocklen,
@@ -1743,16 +1741,16 @@ raid6_submit_rw_request(struct raid_bdev_io *raid_io)
 static int
 raid6_stripe_init(struct stripe *stripe, struct raid_bdev *raid_bdev)
 {
-    uint8_t i, j;
+    uint8_t i;
     void *buf;
 
-    stripe->chunk_buffers = calloc(raid_bdev->num_base_bdevs, sizeof(void *));
+    stripe->chunk_buffers = calloc(raid_bdev->num_base_bdevs + 3, sizeof(void *));
     if (!stripe->chunk_buffers) {
         SPDK_ERRLOG("Failed to allocate chunk buffers array\n");
         return -ENOMEM;
     }
 
-    for (i = 0; i < raid_bdev->num_base_bdevs; i++) {
+    for (i = 0; i < raid_bdev->num_base_bdevs + 3; i++) {
         buf = spdk_dma_malloc(raid_bdev->strip_size * raid_bdev->bdev.blocklen,
                               spdk_max(spdk_bdev_get_buf_align(raid_bdev->base_bdev_info[i].bdev), 32),
                               NULL);
@@ -1768,30 +1766,6 @@ raid6_stripe_init(struct stripe *stripe, struct raid_bdev *raid_bdev)
         stripe->chunk_buffers[i] = buf;
     }
 
-    stripe->tmp_buffers = calloc(3, sizeof(void *));
-    if (!stripe->tmp_buffers) {
-        SPDK_ERRLOG("Failed to allocate tmp buffers array\n");
-        return -ENOMEM;
-    }
-
-    for (i = 0; i < 3; i++) {
-        buf = spdk_dma_malloc(raid_bdev->strip_size * raid_bdev->bdev.blocklen, 32, NULL);
-        if (!buf) {
-            SPDK_ERRLOG("Failed to allocate tmp buffer\n");
-            for (; i > 0; --i) {
-                spdk_dma_free(stripe->tmp_buffers[i]);
-            }
-            free(stripe->tmp_buffers);
-            for (j = 0; j < raid_bdev->num_base_bdevs; j++) {
-                spdk_dma_free(stripe->chunk_buffers[j]);
-            }
-            free(stripe->chunk_buffers);
-            return -ENOMEM;
-        }
-
-        stripe->tmp_buffers[i] = buf;
-    }
-
     TAILQ_INIT(&stripe->requests);
     pthread_spin_init(&stripe->requests_lock, PTHREAD_PROCESS_PRIVATE);
 
@@ -1803,15 +1777,10 @@ raid6_stripe_deinit(struct stripe *stripe, struct raid_bdev *raid_bdev)
 {
     uint8_t i;
 
-    for (i = 0; i < raid_bdev->num_base_bdevs; i++) {
+    for (i = 0; i < raid_bdev->num_base_bdevs + 3; i++) {
         spdk_dma_free(stripe->chunk_buffers[i]);
     }
     free(stripe->chunk_buffers);
-
-    for (i = 0; i < 3; i++) {
-        spdk_dma_free(stripe->chunk_buffers[i]);
-    }
-    free(stripe->tmp_buffers);
 
     pthread_spin_destroy(&stripe->requests_lock);
 }
