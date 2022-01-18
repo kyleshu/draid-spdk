@@ -204,7 +204,6 @@ raid6_get_data_chunk(struct stripe_request *stripe_req, uint8_t chunk_data_idx)
 {
     uint8_t p_chunk_idx = stripe_req->parity_chunk - stripe_req->chunks;
     uint8_t q_chunk_idx = stripe_req->q_chunk - stripe_req->chunks;
-    uint8_t diff = 0;
     if (q_chunk_idx < p_chunk_idx) {
         return &stripe_req->chunks[chunk_data_idx + 1];
     } else {
@@ -240,7 +239,7 @@ raid6_gf_mul(unsigned char *gf_const_tbl, void *to, void *from, size_t size) {
 }
 
 static void
-raid6_q_gen(struct raid6_info* r6info, uint_8 index, void *to, void *from, size_t size) {
+raid6_q_gen(struct raid6_info* r6info, uint8_t index, void *to, void *from, size_t size) {
     unsigned char gf_const_tbl = r6info->gf_const_tbl_arr[index];
     gf_vect_mul(size, gf_const_tbl, from, to);
 }
@@ -311,7 +310,7 @@ raid6_gf_mul_iovs(struct iovec *iovs_dest, int iovs_dest_cnt, size_t iovs_dest_o
 static void
 raid6_q_gen_iovs(struct iovec *iovs_dest, int iovs_dest_cnt, size_t iovs_dest_offset,
                const struct iovec *iovs_src, int iovs_src_cnt, size_t iovs_src_offset,
-               size_t size, struct raid6_info* r6info, uint_8 index)
+               size_t size, struct raid6_info* r6info, uint8_t index)
 {
     struct iovec *v1;
     const struct iovec *v2;
@@ -740,7 +739,7 @@ raid6_complete_stripe_read_request_d(struct stripe_request *stripe_req)
             src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
             raid6_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
                               preread_iovs, preread_iovcnt, src_offset,
-                              d_chunk->req_blocks * blocklen);
+                              chunk->req_blocks * blocklen);
         } else {
             stripe_req->iov_offset += len;
         }
@@ -759,7 +758,7 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct chunk *p_chunk = stripe_req->parity_chunk;
     uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
-    struct raid6_info *r6info = raid_bdev->module_private;
+    struct raid6_info *r6info = stripe_req->raid_io->raid_bdev->module_private;
     void *d_chunk_buf = stripe_req->stripe->chunk_buffers[d_chunk->index];
     void *tmp_buf0 = stripe_req->stripe->tmp_buffers[0];
     size_t src_offset;
@@ -817,7 +816,7 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
             src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
             raid6_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
                               preread_iovs, preread_iovcnt, src_offset,
-                              d_chunk->req_blocks * blocklen);
+                              chunk->req_blocks * blocklen);
         } else {
             stripe_req->iov_offset += len;
         }
@@ -837,7 +836,7 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct chunk *p_chunk = stripe_req->parity_chunk;
     uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
-    struct raid6_info *r6info = raid_bdev->module_private;
+    struct raid6_info *r6info = stripe_req->raid_io->raid_bdev->module_private;
     size_t src_offset;
     uint64_t len;
     struct iovec *preread_iovs;
@@ -883,7 +882,7 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
     SPDK_NOTICELOG("reconstructed read complete\n");
     // Note: construct d_chunk_x
     raid6_memset_iovs(&iov_y, 1, 0);
-    raid6_memset_iovs(&iov_tmp0 1, 0);
+    raid6_memset_iovs(&iov_tmp0, 1, 0);
     FOR_EACH_CHUNK(stripe_req, chunk) {
         if (!chunk->is_degraded) {
             if (chunk->request_type == CHUNK_PREREAD) {
@@ -955,7 +954,7 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
             src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
             raid6_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
                               preread_iovs, preread_iovcnt, src_offset,
-                              d_chunk->req_blocks * blocklen);
+                              chunk->req_blocks * blocklen);
         } else {
             stripe_req->iov_offset += len;
         }

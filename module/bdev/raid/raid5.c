@@ -582,7 +582,7 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
             src_offset = (chunk->req_offset - chunk->preread_offset) * blocklen;
             raid5_memcpy_iovs(chunk->iovs, chunk->iovcnt, 0,
                               preread_iovs, preread_iovcnt, src_offset,
-                              d_chunk->req_blocks * blocklen);
+                              chunk->req_blocks * blocklen);
         } else {
             stripe_req->iov_offset += len;
         }
@@ -870,7 +870,6 @@ raid5_stripe_read(struct stripe_request *stripe_req)
 {
     struct chunk *chunk;
     int ret;
-    struct chunk *p_chunk = stripe_req->parity_chunk;
     struct raid_bdev_io *raid_io = stripe_req->raid_io;
     struct raid_bdev *raid_bdev = raid_io->raid_bdev;
     struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
