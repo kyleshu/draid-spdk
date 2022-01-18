@@ -57,7 +57,7 @@ main(int argc, char **argv)
     void *buffs2[TEST_SOURCES + 2];
     void *tmp_buf[TEST_SOURCES + 2];
 
-    for (i = 0; i < 255; i++) {
+    for (i = 0; i < 256; i++) {
         unsigned char c = 1;
         for (j = 0; j < i; j++) {
             c = gf_mul(c, 2);
@@ -238,6 +238,54 @@ main(int argc, char **argv)
 
     fflush(0);
 
+    // Test partial update
+    for (i = 0; i < TEST_SOURCES; i++) {
+        rand_buffer(buffs[i], TEST_LEN);
+    }
+    memset(buffs[TEST_SOURCES], 0, TEST_LEN);
+    memset(buffs[TEST_SOURCES + 1], 0, TEST_LEN);
+    ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memcpy(buffs2[i], buffs[i], TEST_LEN);
+    }
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(tmp_buf[i], 0, TEST_LEN);
+    }
+
+    rand_buffer(buffs[3], TEST_LEN);
+    ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
+
+    xor_buf(buffs2[TEST_SOURCES], buffs2[3], TEST_LEN);
+    xor_buf(buffs2[TEST_SOURCES], buffs[3], TEST_LEN);
+
+    gf_vect_mul(TEST_LEN, gf_const_tbl_arr[3], buffs2[3], tmp_buf[3]);
+    xor_buf(buffs2[TEST_SOURCES + 1], tmp_buf[3], TEST_LEN);
+    gf_vect_mul(TEST_LEN, gf_const_tbl_arr[3], buffs[3], tmp_buf[3]);
+    xor_buf(buffs2[TEST_SOURCES + 1], tmp_buf[3], TEST_LEN);
+
+    memcpy(buffs2[3], buffs[3], TEST_LEN);
+
+    fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs);
+    fail |= pq_check_base(TEST_SOURCES + 2, TEST_LEN, buffs2);
+
+    if (fail > 0) {
+        int t;
+        printf(" Fail partial wirte fail=%d, ret=%d\n", fail, ret);
+        for (t = 0; t < TEST_SOURCES + 2; t++)
+            dump(buffs2[t], 15);
+
+        printf(" reference function p,q\n");
+        pq_gen_base(TEST_SOURCES + 2, TEST_LEN, buffs);
+        for (t = TEST_SOURCES; t < TEST_SOURCES + 2; t++)
+            dump(buffs[t], 15);
+
+        return 1;
+    } else
+        putchar('.');
+
+    fflush(0);
 
     // Test D+P
     for (i = 0; i < TEST_SOURCES; i++) {
@@ -289,6 +337,10 @@ main(int argc, char **argv)
 
     for (i = 0; i < TEST_SOURCES + 2; i++) {
         memset(buffs2[i], 0, TEST_LEN);
+    }
+
+    for (i = 0; i < TEST_SOURCES + 2; i++) {
+        memset(tmp_buf[i], 0, TEST_LEN);
     }
 
     ret = pq_gen(TEST_SOURCES + 2, TEST_LEN, buffs);
