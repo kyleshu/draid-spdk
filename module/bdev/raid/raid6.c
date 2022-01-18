@@ -757,8 +757,9 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
     struct chunk *d_chunk = stripe_req->degraded_chunks[0];
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct chunk *p_chunk = stripe_req->parity_chunk;
-    uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
-    struct raid6_info *r6info = stripe_req->raid_io->raid_bdev->module_private;
+    struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
+    uint32_t blocklen = raid_bdev->bdev.blocklen;
+    struct raid6_info *r6info = raid_bdev->module_private;
     void *d_chunk_buf = stripe_req->stripe->chunk_buffers[d_chunk->index];
     void *tmp_buf0 = stripe_req->stripe->tmp_buffers[0];
     size_t src_offset;
@@ -835,8 +836,9 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
     struct chunk *d_chunk_y;
     struct chunk *q_chunk = stripe_req->q_chunk;
     struct chunk *p_chunk = stripe_req->parity_chunk;
-    uint32_t blocklen = stripe_req->raid_io->raid_bdev->bdev.blocklen;
-    struct raid6_info *r6info = stripe_req->raid_io->raid_bdev->module_private;
+    struct raid_bdev *raid_bdev = stripe_req->raid_io->raid_bdev;
+    uint32_t blocklen = raid_bdev->bdev.blocklen;
+    struct raid6_info *r6info = raid_bdev->module_private;
     size_t src_offset;
     uint64_t len;
     struct iovec *preread_iovs;
