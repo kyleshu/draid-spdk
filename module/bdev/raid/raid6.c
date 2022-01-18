@@ -1866,7 +1866,7 @@ raid6_start(struct raid_bdev *raid_bdev)
     raid_bdev->bdev.blockcnt = r6info->stripe_blocks * r6info->total_stripes;
     raid_bdev->bdev.optimal_io_boundary = r6info->stripe_blocks;
     raid_bdev->bdev.split_on_optimal_io_boundary = true;
-
+    SPDK_NOTICELOG("Can we reach here?\n");
     r6info->stripes = calloc(RAID_MAX_STRIPES, sizeof(*r6info->stripes));
     if (!r6info->stripes) {
         SPDK_ERRLOG("Failed to allocate stripes array\n");
@@ -1875,11 +1875,12 @@ raid6_start(struct raid_bdev *raid_bdev)
     }
 
     TAILQ_INIT(&r6info->free_stripes);
-
+    SPDK_NOTICELOG("Can we reach here?2\n");
     for (i = 0; i < RAID_MAX_STRIPES; i++) {
         struct stripe *stripe = &r6info->stripes[i];
 
         ret = raid6_stripe_init(stripe, raid_bdev);
+        SPDK_NOTICELOG("Can we reach here?3\n");
         if (ret) {
             for (; i > 0; --i) {
                 raid6_stripe_deinit(&r6info->stripes[i], raid_bdev);
