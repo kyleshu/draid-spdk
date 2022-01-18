@@ -1865,7 +1865,7 @@ raid6_start(struct raid_bdev *raid_bdev)
                 c1 = gf_mul(c1, 2);
             }
             b = gf_mul(c1, gf_inv(c ^ 1));
-            gf_vect_mul_init(a, r6info->gf_const_tbl_arr_b[i][l]);
+            gf_vect_mul_init(b, r6info->gf_const_tbl_arr_b[i][l]);
         }
         gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
         gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
