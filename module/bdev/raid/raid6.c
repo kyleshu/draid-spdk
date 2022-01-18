@@ -1305,6 +1305,8 @@ raid6_stripe_read(struct stripe_request *stripe_req)
     uint8_t degraded_data_chunks = 0;
     enum stripe_degraded_type degraded_type;
     uint64_t len, req_offset, req_blocks;
+    req_offset = 0;
+    req_blocks = 0;
 
     FOR_EACH_CHUNK(stripe_req, chunk) {
         chunk->is_degraded = false;
@@ -1329,6 +1331,7 @@ raid6_stripe_read(struct stripe_request *stripe_req)
 
     if (degraded_data_chunks > raid_bdev->module->base_bdevs_max_degraded) {
         raid6_abort_stripe_request(stripe_req, SPDK_BDEV_IO_STATUS_FAILED);
+        return;
     } else if (degraded_data_chunks == raid_bdev->module->base_bdevs_max_degraded) {
         req_offset = spdk_min(stripe_req->degraded_chunks[0]->req_offset,
                               stripe_req->degraded_chunks[1]->req_offset);
@@ -1337,6 +1340,7 @@ raid6_stripe_read(struct stripe_request *stripe_req)
                      - req_offset;
         if (total_degraded > raid_bdev->module->base_bdevs_max_degraded) {
             raid6_abort_stripe_request(stripe_req, SPDK_BDEV_IO_STATUS_FAILED);
+            return;
         } else {
             stripe_req->degraded_type = degraded_type = DEGRADED_DD;
         }
@@ -1345,6 +1349,7 @@ raid6_stripe_read(struct stripe_request *stripe_req)
         req_blocks = stripe_req->degraded_chunks[0]->req_blocks;
         if (total_degraded > raid_bdev->module->base_bdevs_max_degraded) {
             raid6_abort_stripe_request(stripe_req, SPDK_BDEV_IO_STATUS_FAILED);
+            return;
         } else if (total_degraded == raid_bdev->module->base_bdevs_max_degraded) {
             if (p_chunk->is_degraded) {
                 stripe_req->degraded_type = degraded_type = DEGRADED_DP;

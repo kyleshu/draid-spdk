@@ -891,6 +891,7 @@ raid5_stripe_read(struct stripe_request *stripe_req)
 
     if (d_chunk && total_degraded > raid_bdev->module->base_bdevs_max_degraded) {
         raid5_abort_stripe_request(stripe_req, SPDK_BDEV_IO_STATUS_FAILED);
+        return;
     }
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
