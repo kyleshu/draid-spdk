@@ -1831,26 +1831,26 @@ raid6_start(struct raid_bdev *raid_bdev)
         return -ENOMEM;
     }
 
-    for (int i = 0; i < 256; i++) {
-        unsigned char c = 1;
-        unsigned char a;
-        for (int j = 0; j < i; j++) {
-            c = gf_mul(c, 2);
-        }
-        a = gf_mul(c, gf_inv(c ^ 1));
-        for (int l = 0; l < 256; l++) {
-            unsigned char c1 = 1;
-            unsigned char b;
-            for (int m = 0; m < l; m++) {
-                c1 = gf_mul(c1, 2);
-            }
-            b = gf_mul(c1, gf_inv(c ^ 1));
-            gf_vect_mul_init(b, r6info->gf_const_tbl_arr_b[i][l]);
-        }
-        gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
-        gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
-
-    }
+//    for (int i = 0; i < 256; i++) {
+//        unsigned char c = 1;
+//        unsigned char a;
+//        for (int j = 0; j < i; j++) {
+//            c = gf_mul(c, 2);
+//        }
+//        a = gf_mul(c, gf_inv(c ^ 1));
+//        for (int l = 0; l < 256; l++) {
+//            unsigned char c1 = 1;
+//            unsigned char b;
+//            for (int m = 0; m < l; m++) {
+//                c1 = gf_mul(c1, 2);
+//            }
+//            b = gf_mul(c1, gf_inv(c ^ 1));
+//            gf_vect_mul_init(b, r6info->gf_const_tbl_arr_b[i][l]);
+//        }
+//        gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
+//        gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
+//
+//    }
 
     r6info->raid_bdev = raid_bdev;
 
@@ -1880,7 +1880,7 @@ raid6_start(struct raid_bdev *raid_bdev)
         struct stripe *stripe = &r6info->stripes[i];
 
         ret = raid6_stripe_init(stripe, raid_bdev);
-        SPDK_NOTICELOG("Can we reach her3?%u\n", i);
+        SPDK_NOTICELOG("Can we reach here3?%u\n", i);
         if (ret) {
             for (; i > 0; --i) {
                 raid6_stripe_deinit(&r6info->stripes[i], raid_bdev);
