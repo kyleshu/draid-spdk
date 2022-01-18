@@ -877,23 +877,28 @@ raid5_stripe_read(struct stripe_request *stripe_req)
     struct raid_base_bdev_info *base_info;
     struct chunk *d_chunk = stripe_req->degraded_chunk = NULL;
     uint64_t len;
+    uint8_t total_degraded = 0;
 
     // Note: check if any degraded device is involved
-     FOR_EACH_DATA_CHUNK(stripe_req, chunk) {
-        if (chunk->req_blocks > 0) {
-            base_info = &raid_bdev->base_bdev_info[chunk->index];
-            if (base_info->degraded) { //Note: assuming raid5, at most 1 degraded
+    FOR_EACH_CHUNK(stripe_req, chunk) {
+        base_info = &raid_bdev->base_bdev_info[chunk->index];
+        if (base_info->degraded) {
+            total_degraded++;
+            if (chunk->req_blocks > 0) {
                 d_chunk = stripe_req->degraded_chunk = chunk;
-                break;
             }
         }
-    }   
+    }
+
+    if (d_chunk && total_degraded > raid_bdev->module->base_bdevs_max_degraded) {
+        raid5_abort_stripe_request(stripe_req, SPDK_BDEV_IO_STATUS_FAILED);
+    }
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
         SPDK_NOTICELOG("reconstructed read start\n");
         stripe_req->chunk_requests_complete_cb = raid5_complete_reconstructed_stripe_request;
         FOR_EACH_CHUNK(stripe_req, chunk) {
-            if (chunk == p_chunk || chunk->req_blocks == 0) { // Note: parity chunk or chunks which are not requested
+            if (chunk->req_blocks == 0) { // Note: parity chunk or chunks which are not requested
                 chunk->preread_offset = d_chunk->req_offset;
                 chunk->preread_blocks = d_chunk->req_blocks;
                 chunk->iov.iov_base = stripe_req->stripe->chunk_buffers[chunk->index];
