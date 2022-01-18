@@ -1751,9 +1751,13 @@ raid6_stripe_init(struct stripe *stripe, struct raid_bdev *raid_bdev)
     }
 
     for (i = 0; i < raid_bdev->num_base_bdevs + 3; i++) {
-        buf = spdk_dma_malloc(raid_bdev->strip_size * raid_bdev->bdev.blocklen,
-                              spdk_max(spdk_bdev_get_buf_align(raid_bdev->base_bdev_info[i].bdev), 32),
-                              NULL);
+        if (i < raid_bdev->num_base_bdevs) {
+            buf = spdk_dma_malloc(raid_bdev->strip_size * raid_bdev->bdev.blocklen,
+                                  spdk_max(spdk_bdev_get_buf_align(raid_bdev->base_bdev_info[i].bdev), 32),
+                                  NULL);
+        } else {
+            buf = spdk_dma_malloc(raid_bdev->strip_size * raid_bdev->bdev.blocklen, 32, NULL);
+        }
         if (!buf) {
             SPDK_ERRLOG("Failed to allocate chunk buffer\n");
             for (; i > 0; --i) {
@@ -1827,7 +1831,6 @@ raid6_start(struct raid_bdev *raid_bdev)
         return -ENOMEM;
     }
 
-    SPDK_NOTICELOG("Initialize gf_const_tbl_arr \n");
     for (int i = 0; i < 256; i++) {
         unsigned char c = 1;
         unsigned char a;
@@ -1848,7 +1851,6 @@ raid6_start(struct raid_bdev *raid_bdev)
         gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
 
     }
-    SPDK_NOTICELOG("Initialize gf_const_tbl_arr successfully\n");
 
     r6info->raid_bdev = raid_bdev;
 
