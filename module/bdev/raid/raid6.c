@@ -146,11 +146,11 @@ struct raid6_info {
     /* Hash table containing currently active stripes */
     struct rte_hash *active_stripes_hash; // Note: DPDK's implementation of hash table
 
-    void *gf_const_tbl_arr[255];
+    unsigned char *gf_const_tbl_arr[256];
 
-    void *gf_const_tbl_arr_a[255];
+    unsigned char *gf_const_tbl_arr_a[256];
 
-    void *gf_const_tbl_arr_b[255][255];
+    unsigned char *gf_const_tbl_arr_b[256][256];
 
     /* List of active stripes (in hash table) */
     TAILQ_HEAD(active_stripes_head, stripe) active_stripes;
@@ -1865,7 +1865,6 @@ raid6_start(struct raid_bdev *raid_bdev)
         }
         gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
         gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
-
     }
 
     r6info->raid_bdev = raid_bdev;
