@@ -146,11 +146,11 @@ struct raid6_info {
     /* Hash table containing currently active stripes */
     struct rte_hash *active_stripes_hash; // Note: DPDK's implementation of hash table
 
-    unsigned char *gf_const_tbl_arr[255];
+    void *gf_const_tbl_arr[255];
 
-    unsigned char *gf_const_tbl_arr_a[255];
+    void *gf_const_tbl_arr_a[255];
 
-    unsigned char *gf_const_tbl_arr_b[255][255];
+    void *gf_const_tbl_arr_b[255][255];
 
     /* List of active stripes (in hash table) */
     TAILQ_HEAD(active_stripes_head, stripe) active_stripes;
