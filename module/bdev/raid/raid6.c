@@ -146,11 +146,11 @@ struct raid6_info {
     /* Hash table containing currently active stripes */
     struct rte_hash *active_stripes_hash; // Note: DPDK's implementation of hash table
 
-    unsigned char gf_const_tbl_arr[255][32];
+    unsigned char *gf_const_tbl_arr[255];
 
-    unsigned char gf_const_tbl_arr_a[255][32];
+    unsigned char *gf_const_tbl_arr_a[255];
 
-    unsigned char gf_const_tbl_arr_b[255][255][32];
+    unsigned char *gf_const_tbl_arr_b[255][255];
 
     /* List of active stripes (in hash table) */
     TAILQ_HEAD(active_stripes_head, stripe) active_stripes;
@@ -1831,26 +1831,42 @@ raid6_start(struct raid_bdev *raid_bdev)
         return -ENOMEM;
     }
 
-//    for (int i = 0; i < 256; i++) {
-//        unsigned char c = 1;
-//        unsigned char a;
-//        for (int j = 0; j < i; j++) {
-//            c = gf_mul(c, 2);
-//        }
-//        a = gf_mul(c, gf_inv(c ^ 1));
-//        for (int l = 0; l < 256; l++) {
-//            unsigned char c1 = 1;
-//            unsigned char b;
-//            for (int m = 0; m < l; m++) {
-//                c1 = gf_mul(c1, 2);
-//            }
-//            b = gf_mul(c1, gf_inv(c ^ 1));
-//            gf_vect_mul_init(b, r6info->gf_const_tbl_arr_b[i][l]);
-//        }
-//        gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
-//        gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
-//
-//    }
+    for (int i = 0; i < 256; i++) {
+        r6info->gf_const_tbl_arr[i] = calloc(32, sizeof(unsigned char));
+        r6info->gf_const_tbl_arr_a[i] = calloc(32, sizeof(unsigned char));
+        if (!r6info->gf_const_tbl_arr[i] || !r6info->gf_const_tbl_arr_a[i]) {
+            SPDK_ERRLOG("Failed to allocate gf_const_tbl_arr\n");
+            return -ENOMEM;
+        }
+        for (int j = 0; j < 256; j++) {
+            r6info->gf_const_tbl_arr_b[i][j] = calloc(32, sizeof(unsigned char));
+            if (!r6info->gf_const_tbl_arr_b[i][j]) {
+                SPDK_ERRLOG("Failed to allocate gf_const_tbl_arr\n");
+                return -ENOMEM;
+            }
+        }
+    }
+
+    for (int i = 0; i < 256; i++) {
+        unsigned char c = 1;
+        unsigned char a;
+        for (int j = 0; j < i; j++) {
+            c = gf_mul(c, 2);
+        }
+        a = gf_mul(c, gf_inv(c ^ 1));
+        for (int l = 0; l < 256; l++) {
+            unsigned char c1 = 1;
+            unsigned char b;
+            for (int m = 0; m < l; m++) {
+                c1 = gf_mul(c1, 2);
+            }
+            b = gf_mul(c1, gf_inv(c ^ 1));
+            gf_vect_mul_init(b, r6info->gf_const_tbl_arr_b[i][l]);
+        }
+        gf_vect_mul_init(c, r6info->gf_const_tbl_arr[i]);
+        gf_vect_mul_init(a, r6info->gf_const_tbl_arr_a[i]);
+
+    }
 
     r6info->raid_bdev = raid_bdev;
 
@@ -1866,7 +1882,6 @@ raid6_start(struct raid_bdev *raid_bdev)
     raid_bdev->bdev.blockcnt = r6info->stripe_blocks * r6info->total_stripes;
     raid_bdev->bdev.optimal_io_boundary = r6info->stripe_blocks;
     raid_bdev->bdev.split_on_optimal_io_boundary = true;
-    SPDK_NOTICELOG("Can we reach here?\n");
     r6info->stripes = calloc(RAID_MAX_STRIPES, sizeof(*r6info->stripes));
     if (!r6info->stripes) {
         SPDK_ERRLOG("Failed to allocate stripes array\n");
@@ -1875,12 +1890,10 @@ raid6_start(struct raid_bdev *raid_bdev)
     }
 
     TAILQ_INIT(&r6info->free_stripes);
-    SPDK_NOTICELOG("Can we reach here2?\n");
     for (i = 0; i < RAID_MAX_STRIPES; i++) {
         struct stripe *stripe = &r6info->stripes[i];
 
         ret = raid6_stripe_init(stripe, raid_bdev);
-        SPDK_NOTICELOG("Can we reach here3?%u\n", i);
         if (ret) {
             for (; i > 0; --i) {
                 raid6_stripe_deinit(&r6info->stripes[i], raid_bdev);
@@ -1905,7 +1918,6 @@ raid6_start(struct raid_bdev *raid_bdev)
         ret = -ENOMEM;
         goto out;
     }
-    SPDK_NOTICELOG("Can we reach here4?\n");
     snprintf(name_buf, sizeof(name_buf), "raid6_hash_%p", raid_bdev);
 
     hash_params.name = name_buf;
@@ -1918,7 +1930,6 @@ raid6_start(struct raid_bdev *raid_bdev)
         ret = -ENOMEM;
         goto out;
     }
-    SPDK_NOTICELOG("Can we reach here5?\n");
     TAILQ_INIT(&r6info->active_stripes);
 
     raid_bdev->module_private = r6info;
@@ -1926,7 +1937,6 @@ raid6_start(struct raid_bdev *raid_bdev)
     if (ret) {
         raid6_free(r6info);
     }
-    SPDK_NOTICELOG("Can we reach here6?\n");
     return ret;
 }
 
