@@ -36,6 +36,14 @@
           }
         },
         {
+          "method": "bdev_malloc_create",
+          "params": {
+            "name": "Malloc4",
+            "num_blocks": 32768,
+            "block_size": 512
+          }
+        },
+        {
           "method": "bdev_raid_create",
           "params": {
             "name": "Raid0",
@@ -45,7 +53,8 @@
               "Malloc0",
               "Malloc1",
               "Malloc2",
-              "Malloc3"
+              "Malloc3",
+              "Malloc4"
             ]
           }
         }
