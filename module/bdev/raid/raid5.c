@@ -552,7 +552,6 @@ raid5_complete_reconstructed_stripe_request(struct stripe_request *stripe_req)
     struct iovec *preread_iovs;
     int preread_iovcnt;
 
-    SPDK_NOTICELOG("reconstructed read complete\n");
     // Note: construct d_chunk
     raid5_memset_iovs(d_chunk->iovs, d_chunk->iovcnt, 0);
     FOR_EACH_CHUNK(stripe_req, chunk) {
@@ -895,7 +894,6 @@ raid5_stripe_read(struct stripe_request *stripe_req)
     }
 
     if (d_chunk) { // Note: read necessary blocks for reconstruction
-        SPDK_NOTICELOG("reconstructed read start\n");
         stripe_req->chunk_requests_complete_cb = raid5_complete_reconstructed_stripe_request;
         FOR_EACH_CHUNK(stripe_req, chunk) {
             if (chunk->req_blocks == 0) { // Note: parity chunk or chunks which are not requested

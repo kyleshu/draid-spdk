@@ -707,7 +707,6 @@ raid6_complete_stripe_read_request_d(struct stripe_request *stripe_req)
     struct iovec *preread_iovs;
     int preread_iovcnt;
 
-    SPDK_NOTICELOG("reconstructed read complete\n");
     // Note: construct d_chunk
     raid6_memset_iovs(d_chunk->iovs, d_chunk->iovcnt, 0);
     FOR_EACH_CHUNK(stripe_req, chunk) {
@@ -773,7 +772,6 @@ raid6_complete_stripe_read_request_dp(struct stripe_request *stripe_req)
             .iov_len = raid_bdev->strip_size * blocklen,
     };
 
-    SPDK_NOTICELOG("reconstructed read complete\n");
     // Note: construct d_chunk
     raid6_memset_iovs(&iov0, 1, 0);
     FOR_EACH_CHUNK(stripe_req, chunk) {
@@ -879,7 +877,6 @@ raid6_complete_stripe_read_request_dd(struct stripe_request *stripe_req)
             .iov_len = raid_bdev->strip_size * blocklen,
     };
 
-    SPDK_NOTICELOG("reconstructed read complete\n");
     // Note: construct d_chunk_x
     raid6_memset_iovs(&iov_y, 1, 0);
     raid6_memset_iovs(&iov_tmp0, 1, 0);
