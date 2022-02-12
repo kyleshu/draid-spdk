@@ -30,6 +30,7 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include "../../../dRaid/src/common/common.h"
 
 #include "rocksdb/env.h"
 #include <set>
@@ -46,6 +47,15 @@ extern "C" {
 #include "spdk/thread.h"
 #include "spdk/bdev.h"
 }
+
+static erpc::Nexus *g_nexus;
+
+erpc::Nexus *
+erpc_get_nexus(void)
+{
+    return g_nexus;
+}
+
 
 namespace rocksdb
 {
@@ -784,6 +794,8 @@ SpdkEnv::~SpdkEnv()
 Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 		const std::string &bdev, uint64_t cache_size_in_mb)
 {
+    std::string client_uri = kClientHostname + ":" + std::to_string(kUDPPort);
+    g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
 	try {
 		SpdkEnv *spdk_env = new SpdkEnv(base_env, dir, conf, bdev, cache_size_in_mb);
 		if (g_fs != NULL) {

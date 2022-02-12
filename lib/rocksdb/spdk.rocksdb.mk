@@ -37,7 +37,8 @@ include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
 include $(SPDK_ROOT_DIR)/mk/spdk.app.mk
 include $(SPDK_ROOT_DIR)/mk/spdk.modules.mk
 
-CXXFLAGS +=  -I$(SPDK_DIR)/include -Iinclude/
+CXXFLAGS += -I$(SPDK_DIR)/include -Iinclude/ -I ~/git/eRPC/src -I ~/git/eRPC/third_party/asio/include \
+	     		  -libverbs -DERPC_INFINIBAND=true
 
 # The SPDK makefiles turn this on, but RocksDB won't compile with it.  So
 #  turn it off after including the SPDK makefiles.
