@@ -49,6 +49,7 @@ extern "C" {
 }
 
 static erpc::Nexus *g_nexus;
+static char *g_addr_file = "/users/kyleshu/artifacts/ip_addrs.txt";
 
 erpc::Nexus *
 erpc_get_nexus(void)
@@ -794,7 +795,12 @@ SpdkEnv::~SpdkEnv()
 Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 		const std::string &bdev, uint64_t cache_size_in_mb)
 {
-    std::string client_uri = kClientHostname + ":" + std::to_string(kUDPPort);
+    std::ifstream addrs(g_addr_file, std::ios::in);
+  	std::string ip_addr;
+	addrs>>ip_addr;
+	addrs.close();
+
+	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
     g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
 	try {
 		SpdkEnv *spdk_env = new SpdkEnv(base_env, dir, conf, bdev, cache_size_in_mb);
