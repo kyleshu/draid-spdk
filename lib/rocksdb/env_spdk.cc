@@ -49,7 +49,8 @@ extern "C" {
 }
 
 static erpc::Nexus *g_nexus;
-static char *g_addr_file = "/users/kyleshu/artifacts/ip_addrs.txt";
+static char *g_addr_file = "/users/kyleshu/artifacts/ip_addrs_100g.txt";
+static uint8_t g_phy_port = 1;
 
 erpc::Nexus *
 erpc_get_nexus(void)
@@ -57,6 +58,11 @@ erpc_get_nexus(void)
     return g_nexus;
 }
 
+uint8_t
+erpc_get_phy_port(void)
+{
+    return g_phy_port;
+}
 
 namespace rocksdb
 {
