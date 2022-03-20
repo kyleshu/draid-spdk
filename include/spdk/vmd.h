@@ -39,13 +39,13 @@
 #define SPDK_VMD_H
 
 #include "spdk/stdinc.h"
+#include "spdk/env.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "spdk/config.h"
-#include "spdk/env.h"
 
 /* Maximum VMD devices - up to 6 per cpu */
 #define MAX_VMD_TARGET  24

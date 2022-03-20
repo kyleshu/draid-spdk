@@ -39,12 +39,11 @@
 #define SPDK_IOAT_H
 
 #include "spdk/stdinc.h"
+#include "spdk/env.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "spdk/env.h"
 
 /**
  * Opaque handle for a single I/OAT channel returned by \ref spdk_ioat_probe().

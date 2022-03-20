@@ -39,12 +39,11 @@
 #define SPDK_IDXD_H
 
 #include "spdk/stdinc.h"
+#include "spdk/env.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "spdk/env.h"
 
 /**
  * Opaque handle for a single IDXD channel.

@@ -40,12 +40,12 @@
 #define SPDK_NVME_H
 
 #include "spdk/stdinc.h"
+#include "spdk/env.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "spdk/env.h"
 #include "spdk/nvme_spec.h"
 #include "spdk/nvmf_spec.h"
 
