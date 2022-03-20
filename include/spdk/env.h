@@ -1386,7 +1386,7 @@ int spdk_pci_register_error_handler(spdk_pci_error_handler sighandler, void *ctx
  */
 void spdk_pci_unregister_error_handler(spdk_pci_error_handler sighandler);
 
-struct spdk_rdma_mem_map *spdk_rdma_create_mem_map(struct ibv_pd *pd);
+struct spdk_rdma_mem_map *spdk_rdma_create_mem_map_external(struct ibv_pd *pd);
 
 #ifdef __cplusplus
 }
