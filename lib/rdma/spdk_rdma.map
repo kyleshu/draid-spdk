@@ -14,6 +14,7 @@
 	spdk_rdma_qp_queue_send_wrs;
 	spdk_rdma_qp_flush_send_wrs;
 	spdk_rdma_create_mem_map;
+	spdk_rdma_create_mem_map_external;
 	spdk_rdma_free_mem_map;
 	spdk_rdma_get_translation;
 	spdk_rdma_qp_queue_recv_wrs;
