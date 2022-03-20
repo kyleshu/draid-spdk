@@ -40,12 +40,12 @@
 #define SPDK_NVME_OCSSD_H
 
 #include "spdk/stdinc.h"
+#include "spdk/nvme.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "spdk/nvme.h"
 #include "spdk/nvme_ocssd_spec.h"
 
 /**

@@ -39,12 +39,11 @@
 #define SPDK_NVME_ZNS_H
 
 #include "spdk/stdinc.h"
+#include "spdk/nvme.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "spdk/nvme.h"
 
 /**
  * Get the Zoned Namespace Command Set Specific Identify Namespace data
