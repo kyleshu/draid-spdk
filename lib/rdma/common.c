@@ -177,6 +177,12 @@ spdk_rdma_create_mem_map(struct ibv_pd *pd, struct spdk_nvme_rdma_hooks *hooks,
 	return map;
 }
 
+struct spdk_rdma_mem_map *
+spdk_rdma_create_mem_map(struct ibv_pd *pd)
+{
+    return spdk_rdma_create_mem_map(pd, NULL, SPDK_RDMA_MEMORY_MAP_ROLE_INITIATOR);
+}
+
 void
 spdk_rdma_free_mem_map(struct spdk_rdma_mem_map **_map)
 {

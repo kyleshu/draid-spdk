@@ -42,6 +42,9 @@
 #include "spdk/stdinc.h"
 #include "spdk/queue.h"
 #include "spdk/pci_ids.h"
+#include <infiniband/verbs.h>
+#include <rdma/rdma_cma.h>
+#include <rdma/rdma_verbs.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -1382,6 +1385,8 @@ int spdk_pci_register_error_handler(spdk_pci_error_handler sighandler, void *ctx
  * \param sighandler Signal bus handler of the PCI bus
  */
 void spdk_pci_unregister_error_handler(spdk_pci_error_handler sighandler);
+
+struct spdk_rdma_mem_map *spdk_rdma_create_mem_map(struct ibv_pd *pd);
 
 #ifdef __cplusplus
 }
