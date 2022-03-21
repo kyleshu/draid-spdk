@@ -39,8 +39,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#ifndef SHIFT_2MB
 #define SHIFT_2MB		21 /* (1 << 21) == 2MB */
+#endif
 #define VALUE_2MB		(1ULL << SHIFT_2MB)
 #define MASK_2MB		(VALUE_2MB - 1)
 

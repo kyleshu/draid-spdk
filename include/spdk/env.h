@@ -48,6 +48,16 @@
 extern "C" {
 #endif
 
+#ifndef SHIFT_2MB
+#define SHIFT_2MB		21 /* (1 << 21) == 2MB */
+#endif
+#ifndef SHIFT_1GB
+#define SHIFT_1GB	30 /* (1 << 30) == 1 GB */
+#endif
+#ifndef SHIFT_256TB
+#define SHIFT_256TB	48 /* (1 << 48) == 256 TB */
+#endif
+
 #define SPDK_ENV_SOCKET_ID_ANY	(-1)
 #define SPDK_ENV_LCORE_ID_ANY	(UINT32_MAX)
 
@@ -1214,6 +1224,14 @@ typedef int (*spdk_mem_map_notify_cb)(void *cb_ctx, struct spdk_mem_map *map,
 
 typedef int (*spdk_mem_map_contiguous_translations)(uint64_t addr_1, uint64_t addr_2);
 
+/**
+ * A function table to be implemented by each memory map.
+ */
+struct spdk_mem_map_ops {
+	spdk_mem_map_notify_cb notify_cb;
+	spdk_mem_map_contiguous_translations are_contiguous;
+};
+
 /* Translation of a single 2MB page. */
 struct map_2mb {
     uint64_t translation_2mb;
@@ -1242,14 +1260,6 @@ struct spdk_mem_map {
     struct spdk_mem_map_ops ops;
     void *cb_ctx;
     TAILQ_ENTRY(spdk_mem_map) tailq;
-};
-
-/**
- * A function table to be implemented by each memory map.
- */
-struct spdk_mem_map_ops {
-	spdk_mem_map_notify_cb notify_cb;
-	spdk_mem_map_contiguous_translations are_contiguous;
 };
 
 /**
