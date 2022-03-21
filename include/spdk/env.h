@@ -1214,6 +1214,36 @@ typedef int (*spdk_mem_map_notify_cb)(void *cb_ctx, struct spdk_mem_map *map,
 
 typedef int (*spdk_mem_map_contiguous_translations)(uint64_t addr_1, uint64_t addr_2);
 
+/* Translation of a single 2MB page. */
+struct map_2mb {
+    uint64_t translation_2mb;
+};
+
+/* Second-level map table indexed by bits [21..29] of the virtual address.
+ * Each entry contains the address translation or error for entries that haven't
+ * been retrieved yet.
+ */
+struct map_1gb {
+    struct map_2mb map[1ULL << (SHIFT_1GB - SHIFT_2MB)];
+};
+
+/* Top-level map table indexed by bits [30..47] of the virtual address.
+ * Each entry points to a second-level map table or NULL.
+ */
+struct map_256tb {
+    struct map_1gb *map[1ULL << (SHIFT_256TB - SHIFT_1GB)];
+};
+
+/* Page-granularity memory address translation */
+struct spdk_mem_map {
+    struct map_256tb map_256tb;
+    pthread_mutex_t mutex;
+    uint64_t default_translation;
+    struct spdk_mem_map_ops ops;
+    void *cb_ctx;
+    TAILQ_ENTRY(spdk_mem_map) tailq;
+};
+
 /**
  * A function table to be implemented by each memory map.
  */
@@ -1384,7 +1414,7 @@ int spdk_pci_register_error_handler(spdk_pci_error_handler sighandler, void *ctx
  */
 void spdk_pci_unregister_error_handler(spdk_pci_error_handler sighandler);
 
-struct spdk_rdma_mem_map *spdk_rdma_create_mem_map_external(struct ibv_pd *pd);
+struct spdk_mem_map *spdk_rdma_create_mem_map_external(struct ibv_pd *pd);
 
 #ifdef __cplusplus
 }
