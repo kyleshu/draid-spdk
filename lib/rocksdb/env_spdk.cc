@@ -51,6 +51,7 @@ extern "C" {
 static erpc::Nexus *g_nexus;
 static char *g_addr_file = "/users/kyleshu/artifacts/ip_addrs_100g.txt";
 static uint8_t g_phy_port = 2;
+static std::string g_host_ip_addr;
 
 erpc::Nexus *
 erpc_get_nexus(void)
@@ -62,6 +63,12 @@ uint8_t
 erpc_get_phy_port(void)
 {
     return g_phy_port;
+}
+
+std::string
+get_host_ip_addr(void)
+{
+    return g_host_ip_addr;
 }
 
 namespace rocksdb
@@ -806,6 +813,7 @@ Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 	addrs>>ip_addr;
 	addrs.close();
 
+    g_host_ip_addr = ip_addr;
 	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
     g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
 	try {
