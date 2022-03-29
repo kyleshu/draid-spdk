@@ -160,6 +160,8 @@ struct raid_bdev {
 	/* Raid Level of this raid bdev */
 	enum raid_level			level;
 
+    bool degraded;
+
 	/* Set to true if destruct is called for this raid bdev */
 	bool				destruct_called;
 
@@ -232,6 +234,12 @@ struct raid_bdev_io_channel {
 
 	/* Number of IO channels */
 	uint8_t			num_channels;
+};
+
+struct iov_wrapper {
+    struct iovec iovs[16];
+    uint64_t num_blocks;
+    struct raid_bdev_io *raid_io;
 };
 
 /*

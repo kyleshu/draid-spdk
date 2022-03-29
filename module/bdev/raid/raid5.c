@@ -141,6 +141,7 @@ struct raid5_info {
 
 struct raid5_io_channel {
     TAILQ_HEAD(, spdk_bdev_io_wait_entry) retry_queue;
+    TAILQ_HEAD(, iov_wrapper) iov_w_queue;
 };
 
 #define FOR_EACH_CHUNK(req, c) \
@@ -1140,9 +1141,155 @@ _raid5_submit_rw_request(void *_raid_io)
     raid5_submit_rw_request(raid_io);
 }
 
+void
+raid5_complete_chunk_request_read(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+    struct iov_wrapper *iov_w = cb_arg;
+    struct raid_bdev_io *raid_io = iov_w->raid_io;
+    struct raid5_io_channel *r5ch = (struct raid5_io_channel*) raid_bdev_io_channel_get_resource(raid_io->raid_ch);
+
+    spdk_bdev_free_io(bdev_io);
+
+    raid_bdev_io_complete_part(raid_io, iov_w->num_blocks, success ? SPDK_BDEV_IO_STATUS_SUCCESS : SPDK_BDEV_IO_STATUS_FAILED);
+    TAILQ_INSERT_TAIL(&r5ch->iov_w_queue, iov_w, link);
+}
+
+static int
+raid5_map_iov(struct iovec *iovs, const struct iovec *iov, int iovcnt,
+              uint64_t offset, uint64_t len)
+{
+    int i;
+    size_t off = 0;
+    int start_v = -1;
+    size_t start_v_off;
+    int new_iovcnt = 0;
+    int ret;
+
+    // Note: find the start iov
+    for (i = 0; i < iovcnt; i++) {
+        if (off + iov[i].iov_len > offset) {
+            start_v = i;
+            break;
+        }
+        off += iov[i].iov_len;
+    }
+
+    if (start_v == -1) {
+        return -1;
+    }
+
+    start_v_off = off;
+
+    // Note: find the end iov
+    for (i = start_v; i < iovcnt; i++) {
+        new_iovcnt++;
+
+        if (off + iov[i].iov_len >= offset + len) {
+            break;
+        }
+        off += iov[i].iov_len;
+    }
+
+    assert(start_v + new_iovcnt <= iovcnt);
+
+    ret = new_iovcnt;
+
+    off = start_v_off;
+    iov += start_v;
+
+    // Note: set up iovs from iovs from bdev_io
+    for (i = 0; i < new_iovcnt; i++) {
+        iovs[i].iov_base = (char*)iov->iov_base + (offset - off);
+        iovs[i].iov_len = spdk_min(len, iov->iov_len - (offset - off));
+
+        off += iov->iov_len;
+        iov++;
+        offset += iovs[i].iov_len;
+        len -= iovs[i].iov_len;
+    }
+
+    if (len > 0) {
+        return -1;
+    }
+
+    return ret;
+}
+
+static void
+raid5_handle_read(struct raid_bdev_io *raid_io, uint64_t stripe_index, uint64_t stripe_offset, uint64_t blocks)
+{
+    struct raid_bdev *raid_bdev = raid_io->raid_bdev;
+    struct raid5_io_channel *r5ch = (struct raid5_io_channel*) raid_bdev_io_channel_get_resource(raid_io->raid_ch);
+    struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
+    struct iovec *iov = bdev_io->u.bdev.iovs;
+    int iovcnt = bdev_io->u.bdev.iovcnt;
+    uint64_t iov_offset = 0;
+
+    uint64_t chunk_offset_from, chunk_offset_to, chunk_req_offset, chunk_req_blocks, chunk_len;
+    struct iov_wrapper *iov_w;
+    struct raid_base_bdev_info *base_info;
+    struct spdk_io_channel *base_ch;
+    int chunk_iovcnt;
+    uint64_t base_offset_blocks;
+
+    uint64_t stripe_offset_from = stripe_offset;
+    uint64_t stripe_offset_to = stripe_offset_from + blocks;
+    uint8_t first_chunk_idx = stripe_offset_from >> raid_bdev->strip_size_shift;
+    uint8_t last_chunk_idx = (stripe_offset_to - 1) >> raid_bdev->strip_size_shift;
+
+    uint8_t p_chunk_idx = raid5_stripe_data_chunks_num(raid_bdev) - stripe_index % raid_bdev->num_base_bdevs; // different for raid6
+    if (first_chunk_idx >= p_chunk_idx) {
+        first_chunk_idx++;
+    }
+    if (last_chunk_idx >= p_chunk_idx) {
+        last_chunk_idx++;
+    }
+    for (uint8_t i = 0; i < raid_bdev->num_base_bdevs; i++) {
+        if (i == p_chunk_idx || i < first_chunk_idx || i > last_chunk_idx) { // add q for raid6
+            continue;
+        } else {
+            chunk_offset_from = (i < p_chunk_idx ? i : i - 1) << raid_bdev->strip_size_shift; // different for raid6
+            chunk_offset_to = chunk_offset_from + raid_bdev->strip_size;
+
+            if (stripe_offset_from > chunk_offset_from) {
+                chunk_req_offset = stripe_offset_from - chunk_offset_from;
+            } else {
+                chunk_req_offset = 0;
+            }
+
+            if (stripe_offset_to < chunk_offset_to) {
+                chunk_req_blocks = stripe_offset_to - chunk_offset_from;
+            } else {
+                chunk_req_blocks = raid_bdev->strip_size;
+            }
+
+            chunk_req_blocks -= chunk_req_offset;
+
+            chunk_len = chunk_req_blocks << raid_bdev->blocklen_shift;
+
+            iov_w = TAILQ_FIRST(&r5ch->iov_w_queue);
+            TAILQ_REMOVE(&r5ch->iov_w_queue, iov_w, link);
+            iov_w->num_blocks = chunk_req_blocks;
+            iov_w->raid_io = raid_io;
+
+            chunk_iovcnt = raid5_map_iov(iov_w->iovs, iov, iovcnt, iov_offset, chunk_len);
+            iov_offset += chunk_len;
+
+            base_info = = &raid_bdev->base_bdev_info[i];
+            base_ch = raid_io->raid_ch->base_channel[i];
+            base_offset_blocks = (stripe_index << raid_bdev->strip_size_shift) + chunk_req_offset;
+
+            spdk_bdev_readv_blocks(base_info->desc, base_ch, chunk->iovs, chunk_iovcnt, base_offset_blocks,
+                                   chunk_req_blocks, raid5_complete_chunk_request_read, iov_w);
+        }
+    }
+
+}
+
 static void
 raid5_submit_rw_request(struct raid_bdev_io *raid_io)
 {
+    struct raid_bdev *raid_bdev = raid_io->raid_bdev;
     struct spdk_bdev_io *bdev_io = spdk_bdev_io_from_ctx(raid_io);
     struct raid5_info *r5info = raid_io->raid_bdev->module_private;
     uint64_t offset_blocks = bdev_io->u.bdev.offset_blocks;
@@ -1150,6 +1297,12 @@ raid5_submit_rw_request(struct raid_bdev_io *raid_io)
     uint64_t stripe_index = offset_blocks / r5info->stripe_blocks;
     uint64_t stripe_offset = offset_blocks % r5info->stripe_blocks;
     struct stripe *stripe;
+
+    if (!raid_bdev->degraded && bdev_io->type == SPDK_BDEV_IO_TYPE_READ) {
+        raid_io->base_bdev_io_remaining = num_blocks;
+        raid5_handle_read(raid_io, stripe_index, stripe_offset, num_blocks);
+        return;
+    }
 
     stripe = raid5_get_stripe(r5info, stripe_index);
     if (spdk_unlikely(stripe == NULL)) {
@@ -1346,6 +1499,13 @@ raid5_io_channel_resource_init(struct raid_bdev *raid_bdev, void *resource)
     struct raid5_io_channel *r5ch = resource;
 
     TAILQ_INIT(&r5ch->retry_queue);
+    TAILQ_INIT(&r5ch->iov_w_queue);
+    uint16_t i;
+    struct iov_wrapper *iov_w;
+    for (i = 0; i < 512; i++) {
+        iov_w = calloc(1, sizeof(struct iov_wrapper));
+        TAILQ_INSERT_TAIL(&r5ch->iov_w_queue, iov_w, link);
+    }
 
     return 0;
 }
@@ -1356,6 +1516,12 @@ raid5_io_channel_resource_deinit(void *resource)
     struct raid5_io_channel *r5ch = resource;
 
     assert(TAILQ_EMPTY(&r5ch->retry_queue));
+    struct iov_wrapper *iov_w;
+    while (!TAILQ_EMPTY(&r5ch->iov_w_queue)) {
+        iov_w = TAILQ_FIRST(&r5ch->iov_w_queue);
+        TAILQ_REMOVE(&r5ch->iov_w_queue, iov_w, link);
+        free(iov_w);
+    }
 }
 
 static struct raid_bdev_module g_raid5_module = {

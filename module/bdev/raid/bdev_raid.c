@@ -1084,6 +1084,7 @@ raid_bdev_create(struct raid_bdev_config *raid_cfg)
 	raid_bdev->state = RAID_BDEV_STATE_CONFIGURING;
 	raid_bdev->config = raid_cfg;
 	raid_bdev->level = raid_cfg->level;
+    raid_bdev->degraded = false;
 
 	raid_bdev_gen = &raid_bdev->bdev;
 
@@ -1154,8 +1155,18 @@ raid_bdev_alloc_base_bdev_resource(struct raid_bdev *raid_bdev, const char *bdev
 	raid_bdev->base_bdev_info[base_bdev_slot].bdev = bdev;
 	raid_bdev->base_bdev_info[base_bdev_slot].desc = desc;
     raid_bdev->base_bdev_info[base_bdev_slot].degraded = false;
-//    if (base_bdev_slot == 0) {
-//        raid_bdev->base_bdev_info[base_bdev_slot].degraded = true; //TODO: remove this
+    // TODO: add this when testing with degraded disk
+//    if (raid_bdev->level == RAID5) {
+//        if (base_bdev_slot == 0) {
+//            raid_bdev->base_bdev_info[base_bdev_slot].degraded = true;
+//            raid_bdev->degraded = true;
+//        }
+//    }
+//    if (raid_bdev->level == RAID6) {
+//        if (base_bdev_slot == 0 || base_bdev_slot == 1) {
+//            raid_bdev->base_bdev_info[base_bdev_slot].degraded = true;
+//            raid_bdev->degraded = true;
+//        }
 //    }
 	raid_bdev->num_base_bdevs_discovered++;
 	assert(raid_bdev->num_base_bdevs_discovered <= raid_bdev->num_base_bdevs);
