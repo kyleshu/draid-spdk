@@ -1141,7 +1141,10 @@ _raid5_submit_rw_request(void *_raid_io)
     raid5_submit_rw_request(raid_io);
 }
 
-void
+static void
+raid5_complete_chunk_request_read(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg);
+
+static void
 raid5_complete_chunk_request_read(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
 {
     struct iov_wrapper *iov_w = cb_arg;
