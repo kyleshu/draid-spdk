@@ -240,6 +240,8 @@ struct iov_wrapper {
     struct iovec iovs[16];
     uint64_t num_blocks;
     struct raid_bdev_io *raid_io;
+
+    TAILQ_ENTRY(iov_wrapper) link;
 };
 
 /*
