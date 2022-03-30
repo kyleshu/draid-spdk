@@ -1275,11 +1275,11 @@ raid5_handle_read(struct raid_bdev_io *raid_io, uint64_t stripe_index, uint64_t 
             chunk_iovcnt = raid5_map_iov(iov_w->iovs, iov, iovcnt, iov_offset, chunk_len);
             iov_offset += chunk_len;
 
-            base_info = = &raid_bdev->base_bdev_info[i];
+            base_info = &raid_bdev->base_bdev_info[i];
             base_ch = raid_io->raid_ch->base_channel[i];
             base_offset_blocks = (stripe_index << raid_bdev->strip_size_shift) + chunk_req_offset;
 
-            spdk_bdev_readv_blocks(base_info->desc, base_ch, chunk->iovs, chunk_iovcnt, base_offset_blocks,
+            spdk_bdev_readv_blocks(base_info->desc, base_ch, iov_w->iovs, chunk_iovcnt, base_offset_blocks,
                                    chunk_req_blocks, raid5_complete_chunk_request_read, iov_w);
         }
     }
