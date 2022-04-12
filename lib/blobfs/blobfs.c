@@ -2684,6 +2684,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		if (length > (final_offset - offset)) {
 			length = final_offset - offset;
 		}
+		printf("length in loop %lu\n", length);
 
 		buf = tree_find_filled_buffer(file->tree, offset);
 		if (buf == NULL) {
@@ -2699,6 +2700,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 			if ((offset + length) > (buf->offset + buf->bytes_filled)) {
 				read_len = buf->offset + buf->bytes_filled - offset;
 			}
+			printf("read_len is %lu\n", read_len);
 			BLOBFS_TRACE(file, "read %p offset=%ju length=%ju\n", payload, offset, read_len);
 			memcpy(payload, &buf->buf[offset - buf->offset], read_len);
 			if ((offset + read_len) % CACHE_BUFFER_SIZE == 0) {
