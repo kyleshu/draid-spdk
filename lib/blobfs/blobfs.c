@@ -2660,6 +2660,8 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		return 0;
 	}
 
+	printf("offset: %lu\n", offset);
+
 	if (offset + length > file->append_pos) {
 		length = file->append_pos - offset;
 	}
