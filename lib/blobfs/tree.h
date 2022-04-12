@@ -43,7 +43,7 @@ struct cache_buffer {
 	bool			in_progress;
 };
 
-#define CACHE_BUFFER_SHIFT (18)
+#define CACHE_BUFFER_SHIFT (22)
 #define CACHE_BUFFER_SIZE (1U << CACHE_BUFFER_SHIFT)
 #define NEXT_CACHE_BUFFER_OFFSET(offset)	\
 	(((offset + CACHE_BUFFER_SIZE) >> CACHE_BUFFER_SHIFT) << CACHE_BUFFER_SHIFT)
