@@ -2336,6 +2336,7 @@ __file_flush(void *ctx)
 	args->op.flush.cache_buffer = next;
 
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
+	printf("length %lu, io unit size %u\n", length, lba_size);
 
 	next->in_progress = true;
 	BLOBFS_TRACE(file, "offset=0x%jx length=0x%jx page start=0x%jx num=0x%jx\n",
@@ -2514,7 +2515,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	cur_payload = payload;
 	while (rem_length > 0) {
 		copy = last->buf_size - last->bytes_filled;
-		printf("copy size %lu to flush\n", copy);
+		printf("copy size %lu to flush, rem_length %lu, length %lu\n", copy, rem_length, length);
 		if (copy > rem_length) {
 			copy = rem_length;
 		}
