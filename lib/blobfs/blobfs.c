@@ -1063,6 +1063,7 @@ void
 spdk_fs_create_file_async(struct spdk_filesystem *fs, const char *name,
 			  spdk_file_op_complete cb_fn, void *cb_arg)
 {
+	SPDK_NOTICELOG("log here\n");
 	struct spdk_file *file;
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;
@@ -1216,6 +1217,7 @@ void
 spdk_fs_open_file_async(struct spdk_filesystem *fs, const char *name, uint32_t flags,
 			spdk_file_op_with_handle_complete cb_fn, void *cb_arg)
 {
+	SPDK_NOTICELOG("log here\n");
 	struct spdk_file *f = NULL;
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;

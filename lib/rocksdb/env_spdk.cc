@@ -478,6 +478,7 @@ public:
 			int rc;
 
 			set_channel();
+			printf("new random file\n");
 			rc = spdk_fs_open_file(g_fs, g_sync_args.channel,
 					       name.c_str(), 0, &file);
 			if (rc == 0) {
