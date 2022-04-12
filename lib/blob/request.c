@@ -147,6 +147,7 @@ bs_sequence_read_dev(spdk_bs_sequence_t *seq, void *payload,
 		     uint64_t lba, uint32_t lba_count,
 		     spdk_bs_sequence_cpl cb_fn, void *cb_arg)
 {
+	printf("bs seq lba_count %lu, lba %u\n", lba_count, lba);
 	struct spdk_bs_request_set      *set = (struct spdk_bs_request_set *)seq;
 	struct spdk_bs_channel       *channel = set->channel;
 
