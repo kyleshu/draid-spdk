@@ -1890,6 +1890,7 @@ __readwrite(struct spdk_file *file, struct spdk_io_channel *channel,
 	    spdk_file_op_complete cb_fn, void *cb_arg, int is_read)
 {
 	struct iovec iov;
+	SPDK_NOTICELOG("readwrite %lu\n", length);
 
 	iov.iov_base = payload;
 	iov.iov_len = (size_t)length;
@@ -2470,6 +2471,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		arg.rwerrno = 0;
 		file->append_pos += length;
 		pthread_spin_unlock(&file->lock);
+		SPDK_NOTICELOG("write to file %lu", length);
 		rc = __send_rw_from_file(file, payload, offset, length, false, &arg);
 		if (rc != 0) {
 			return rc;
@@ -2678,6 +2680,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		buf = tree_find_filled_buffer(file->tree, offset);
 		if (buf == NULL) {
 			pthread_spin_unlock(&file->lock);
+			SPDK_NOTICELOG("read from file %lu", length);
 			ret = __send_rw_from_file(file, payload, offset, length, true, &arg);
 			pthread_spin_lock(&file->lock);
 			if (ret == 0) {
