@@ -2279,6 +2279,7 @@ __file_flush_done(void *ctx, int bserrno)
 static void
 __file_flush(void *ctx)
 {
+	printf("in file flush\n");
 	struct spdk_fs_request *req = ctx;
 	struct spdk_fs_cb_args *args = &req->args;
 	struct spdk_file *file = args->file;
@@ -2472,7 +2473,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		arg.rwerrno = 0;
 		file->append_pos += length;
 		pthread_spin_unlock(&file->lock);
-		SPDK_NOTICELOG("write to file %lu", length);
+		printf("write to file %lu", length);
 		rc = __send_rw_from_file(file, payload, offset, length, false, &arg);
 		if (rc != 0) {
 			return rc;
@@ -2482,6 +2483,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	}
 
 	blob_size = __file_get_blob_size(file);
+	printf("blobsize: %lu\n", blob_size);
 
 	if ((offset + length) > blob_size) {
 		struct spdk_fs_cb_args extend_args = {};
@@ -2499,6 +2501,8 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		}
 	}
 
+	printf("log here\n");
+
 	flush_req = alloc_fs_request(channel);
 	if (flush_req == NULL) {
 		pthread_spin_unlock(&file->lock);
@@ -2510,6 +2514,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	cur_payload = payload;
 	while (rem_length > 0) {
 		copy = last->buf_size - last->bytes_filled;
+		printf("copy size %d to flush\n");
 		if (copy > rem_length) {
 			copy = rem_length;
 		}
