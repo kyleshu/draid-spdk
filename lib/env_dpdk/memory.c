@@ -107,35 +107,35 @@ static struct vfio_cfg g_vfio = {
  */
 #define REG_MAP_NOTIFY_START	(1ULL << 63)
 
-/* Translation of a single 2MB page. */
-struct map_2mb {
-	uint64_t translation_2mb;
-};
-
-/* Second-level map table indexed by bits [21..29] of the virtual address.
- * Each entry contains the address translation or error for entries that haven't
- * been retrieved yet.
- */
-struct map_1gb {
-	struct map_2mb map[1ULL << (SHIFT_1GB - SHIFT_2MB)];
-};
-
-/* Top-level map table indexed by bits [30..47] of the virtual address.
- * Each entry points to a second-level map table or NULL.
- */
-struct map_256tb {
-	struct map_1gb *map[1ULL << (SHIFT_256TB - SHIFT_1GB)];
-};
-
-/* Page-granularity memory address translation */
-struct spdk_mem_map {
-	struct map_256tb map_256tb;
-	pthread_mutex_t mutex;
-	uint64_t default_translation;
-	struct spdk_mem_map_ops ops;
-	void *cb_ctx;
-	TAILQ_ENTRY(spdk_mem_map) tailq;
-};
+///* Translation of a single 2MB page. */
+//struct map_2mb {
+//	uint64_t translation_2mb;
+//};
+//
+///* Second-level map table indexed by bits [21..29] of the virtual address.
+// * Each entry contains the address translation or error for entries that haven't
+// * been retrieved yet.
+// */
+//struct map_1gb {
+//	struct map_2mb map[1ULL << (SHIFT_1GB - SHIFT_2MB)];
+//};
+//
+///* Top-level map table indexed by bits [30..47] of the virtual address.
+// * Each entry points to a second-level map table or NULL.
+// */
+//struct map_256tb {
+//	struct map_1gb *map[1ULL << (SHIFT_256TB - SHIFT_1GB)];
+//};
+//
+///* Page-granularity memory address translation */
+//struct spdk_mem_map {
+//	struct map_256tb map_256tb;
+//	pthread_mutex_t mutex;
+//	uint64_t default_translation;
+//	struct spdk_mem_map_ops ops;
+//	void *cb_ctx;
+//	TAILQ_ENTRY(spdk_mem_map) tailq;
+//};
 
 /* Registrations map. The 64 bit translations are bit fields with the
  * following layout (starting with the low bits):

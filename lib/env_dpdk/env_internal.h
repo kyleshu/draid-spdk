@@ -53,10 +53,14 @@
 /* x86-64 and ARM userspace virtual addresses use only the low 48 bits [0..47],
  * which is enough to cover 256 TB.
  */
+#ifndef SHIFT_256TB
 #define SHIFT_256TB	48 /* (1 << 48) == 256 TB */
+#endif
 #define MASK_256TB	((1ULL << SHIFT_256TB) - 1)
 
+#ifndef SHIFT_1GB
 #define SHIFT_1GB	30 /* (1 << 30) == 1 GB */
+#endif
 #define MASK_1GB	((1ULL << SHIFT_1GB) - 1)
 
 #define SPDK_PCI_DRIVER_MAX_NAME_LEN 32
