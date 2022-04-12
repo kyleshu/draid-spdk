@@ -2438,6 +2438,7 @@ int
 spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		void *payload, uint64_t offset, uint64_t length)
 {
+	printf("in spdk_file_write, size %u\n", length);
 	struct spdk_fs_channel *channel = (struct spdk_fs_channel *)ctx;
 	struct spdk_fs_request *flush_req;
 	uint64_t rem_length, copy, blob_size, cluster_sz;
@@ -2634,6 +2635,7 @@ int64_t
 spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	       void *payload, uint64_t offset, uint64_t length)
 {
+	printf("in spdk_file_read, size %u\n", length);
 	struct spdk_fs_channel *channel = (struct spdk_fs_channel *)ctx;
 	uint64_t final_offset, final_length;
 	uint32_t sub_reads = 0;
