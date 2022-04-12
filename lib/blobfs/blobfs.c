@@ -2514,7 +2514,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	cur_payload = payload;
 	while (rem_length > 0) {
 		copy = last->buf_size - last->bytes_filled;
-		printf("copy size %d to flush\n");
+		printf("copy size %lu to flush\n", copy);
 		if (copy > rem_length) {
 			copy = rem_length;
 		}

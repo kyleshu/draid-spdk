@@ -7341,6 +7341,7 @@ void spdk_blob_io_write(struct spdk_blob *blob, struct spdk_io_channel *channel,
 			void *payload, uint64_t offset, uint64_t length,
 			spdk_blob_op_complete cb_fn, void *cb_arg)
 {
+	printf("blob io write %lu\n", length);
 	blob_request_submit_op(blob, channel, payload, offset, length, cb_fn, cb_arg,
 			       SPDK_BLOB_WRITE);
 }
