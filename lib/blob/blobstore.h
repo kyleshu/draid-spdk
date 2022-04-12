@@ -427,7 +427,7 @@ struct spdk_bs_super_block {
 	uint64_t        size; /* size of blobstore in bytes */
 	uint32_t        io_unit_size; /* Size of io unit in bytes */
 
-	uint8_t         reserved[65540];
+	uint8_t         reserved[65440];
 	uint32_t	crc;
 };
 SPDK_STATIC_ASSERT(sizeof(struct spdk_bs_super_block) == 0x10000, "Invalid super block size");
