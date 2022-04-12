@@ -429,8 +429,9 @@ struct spdk_bs_super_block {
 
 	uint8_t         reserved[4000];
 	uint32_t	crc;
+	uint8_t        padding[4096];
 };
-SPDK_STATIC_ASSERT(sizeof(struct spdk_bs_super_block) == 0x1000, "Invalid super block size");
+SPDK_STATIC_ASSERT(sizeof(struct spdk_bs_super_block) == 0x2000, "Invalid super block size");
 
 #pragma pack(pop)
 
