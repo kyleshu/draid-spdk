@@ -2584,6 +2584,7 @@ __readahead(void *ctx)
 	length = args->op.readahead.length;
 	assert(length > 0);
 
+	printf("in readhead, offset %lu, length %lu\n", offset, length);
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
 
 	BLOBFS_TRACE(file, "offset=%jx length=%jx page start=%jx num=%jx\n",
@@ -2603,6 +2604,7 @@ static void
 check_readahead(struct spdk_file *file, uint64_t offset,
 		struct spdk_fs_channel *channel)
 {
+	printf("in check_readhead\n");
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;
 
@@ -2672,9 +2674,12 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	file->seq_byte_count += length;
 	file->next_seq_offset = offset + length;
 	if (file->seq_byte_count >= CACHE_READAHEAD_THRESHOLD) {
+		printf("read ahead\n");
 		check_readahead(file, offset, channel);
 		check_readahead(file, offset + CACHE_BUFFER_SIZE, channel);
 	}
+
+	printf("log here\n");
 
 	arg.channel = channel;
 	arg.rwerrno = 0;
