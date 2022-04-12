@@ -1063,7 +1063,7 @@ void
 spdk_fs_create_file_async(struct spdk_filesystem *fs, const char *name,
 			  spdk_file_op_complete cb_fn, void *cb_arg)
 {
-	SPDK_NOTICELOG("log here\n");
+	// SPDK_NOTICELOG("log here\n");
 	struct spdk_file *file;
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;
@@ -1217,7 +1217,7 @@ void
 spdk_fs_open_file_async(struct spdk_filesystem *fs, const char *name, uint32_t flags,
 			spdk_file_op_with_handle_complete cb_fn, void *cb_arg)
 {
-	SPDK_NOTICELOG("log here\n");
+	// SPDK_NOTICELOG("log here\n");
 	struct spdk_file *f = NULL;
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;
@@ -2281,7 +2281,7 @@ __file_flush_done(void *ctx, int bserrno)
 static void
 __file_flush(void *ctx)
 {
-	printf("in file flush\n");
+	// printf("in file flush\n");
 	struct spdk_fs_request *req = ctx;
 	struct spdk_fs_cb_args *args = &req->args;
 	struct spdk_file *file = args->file;
@@ -2338,7 +2338,7 @@ __file_flush(void *ctx)
 	args->op.flush.cache_buffer = next;
 
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
-	printf("length %lu, io unit size %u\n", length, lba_size);
+	// printf("length %lu, io unit size %u\n", length, lba_size);
 
 	next->in_progress = true;
 	BLOBFS_TRACE(file, "offset=0x%jx length=0x%jx page start=0x%jx num=0x%jx\n",
@@ -2442,7 +2442,7 @@ int
 spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		void *payload, uint64_t offset, uint64_t length)
 {
-	printf("in spdk_file_write, size %u\n", length);
+	// printf("in spdk_file_write, size %u\n", length);
 	struct spdk_fs_channel *channel = (struct spdk_fs_channel *)ctx;
 	struct spdk_fs_request *flush_req;
 	uint64_t rem_length, copy, blob_size, cluster_sz;
@@ -2476,7 +2476,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		arg.rwerrno = 0;
 		file->append_pos += length;
 		pthread_spin_unlock(&file->lock);
-		printf("write to file %lu", length);
+		// printf("write to file %lu", length);
 		rc = __send_rw_from_file(file, payload, offset, length, false, &arg);
 		if (rc != 0) {
 			return rc;
@@ -2486,7 +2486,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	}
 
 	blob_size = __file_get_blob_size(file);
-	printf("blobsize: %lu\n", blob_size);
+	// printf("blobsize: %lu\n", blob_size);
 
 	if ((offset + length) > blob_size) {
 		struct spdk_fs_cb_args extend_args = {};
@@ -2504,7 +2504,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		}
 	}
 
-	printf("log here\n");
+	// printf("log here\n");
 
 	flush_req = alloc_fs_request(channel);
 	if (flush_req == NULL) {
@@ -2517,7 +2517,7 @@ spdk_file_write(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	cur_payload = payload;
 	while (rem_length > 0) {
 		copy = last->buf_size - last->bytes_filled;
-		printf("copy size %lu to flush, rem_length %lu, length %lu\n", copy, rem_length, length);
+		// printf("copy size %lu to flush, rem_length %lu, length %lu\n", copy, rem_length, length);
 		if (copy > rem_length) {
 			copy = rem_length;
 		}
@@ -2586,7 +2586,7 @@ __readahead(void *ctx)
 	length = args->op.readahead.length;
 	assert(length > 0);
 
-	printf("in readhead, offset %lu, length %lu\n", offset, length);
+	// printf("in readhead, offset %lu, length %lu\n", offset, length);
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
 
 	BLOBFS_TRACE(file, "offset=%jx length=%jx page start=%jx num=%jx\n",
@@ -2606,7 +2606,7 @@ static void
 check_readahead(struct spdk_file *file, uint64_t offset,
 		struct spdk_fs_channel *channel)
 {
-	printf("in check_readhead\n");
+	// printf("in check_readhead\n");
 	struct spdk_fs_request *req;
 	struct spdk_fs_cb_args *args;
 
@@ -2645,7 +2645,7 @@ int64_t
 spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	       void *payload, uint64_t offset, uint64_t length)
 {
-	printf("in spdk_file_read, size %u\n", length);
+	// printf("in spdk_file_read, size %u\n", length);
 	struct spdk_fs_channel *channel = (struct spdk_fs_channel *)ctx;
 	uint64_t final_offset, final_length;
 	uint32_t sub_reads = 0;
@@ -2664,7 +2664,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		return 0;
 	}
 
-	printf("offset: %lu\n", offset);
+	// printf("offset: %lu\n", offset);
 
 	if (offset + length > file->append_pos) {
 		length = file->append_pos - offset;
@@ -2676,12 +2676,12 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 	file->seq_byte_count += length;
 	file->next_seq_offset = offset + length;
 	if (file->seq_byte_count >= CACHE_READAHEAD_THRESHOLD) {
-		printf("read ahead\n");
+		// printf("read ahead\n");
 		check_readahead(file, offset, channel);
 		check_readahead(file, offset + CACHE_BUFFER_SIZE, channel);
 	}
 
-	printf("log here\n");
+	// printf("log here\n");
 
 	arg.channel = channel;
 	arg.rwerrno = 0;
@@ -2693,7 +2693,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		if (length > (final_offset - offset)) {
 			length = final_offset - offset;
 		}
-		printf("length in loop %lu\n", length);
+		// printf("length in loop %lu\n", length);
 
 		buf = tree_find_filled_buffer(file->tree, offset);
 		if (buf == NULL) {
@@ -2709,7 +2709,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 			if ((offset + length) > (buf->offset + buf->bytes_filled)) {
 				read_len = buf->offset + buf->bytes_filled - offset;
 			}
-			printf("read_len is %lu\n", read_len);
+			// printf("read_len is %lu\n", read_len);
 			BLOBFS_TRACE(file, "read %p offset=%ju length=%ju\n", payload, offset, read_len);
 			memcpy(payload, &buf->buf[offset - buf->offset], read_len);
 			if ((offset + read_len) % CACHE_BUFFER_SIZE == 0) {

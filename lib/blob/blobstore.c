@@ -2260,7 +2260,7 @@ blob_persist_dirty(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 static void
 blob_persist_check_dirty(struct spdk_blob_persist_ctx *ctx)
 {
-	SPDK_NOTICELOG("log here\n");
+	// SPDK_NOTICELOG("log here\n");
 	if (ctx->blob->bs->clean) {
 		ctx->super = spdk_zmalloc(sizeof(*ctx->super), 0x1000, NULL,
 					  SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
@@ -2282,7 +2282,7 @@ static void
 blob_persist(spdk_bs_sequence_t *seq, struct spdk_blob *blob,
 	     spdk_bs_sequence_cpl cb_fn, void *cb_arg)
 {
-	SPDK_NOTICELOG("log here\n");
+	// SPDK_NOTICELOG("log here\n");
 	struct spdk_blob_persist_ctx *ctx;
 
 	blob_verify_md_op(blob);
@@ -5536,7 +5536,7 @@ bs_create_blob(struct spdk_blob_store *bs,
 void spdk_bs_create_blob(struct spdk_blob_store *bs,
 			 spdk_blob_op_with_id_complete cb_fn, void *cb_arg)
 {
-	SPDK_NOTICELOG("log here\n");
+	// SPDK_NOTICELOG("log here\n");
 	bs_create_blob(bs, NULL, NULL, cb_fn, cb_arg);
 }
 
@@ -7344,7 +7344,7 @@ void spdk_blob_io_write(struct spdk_blob *blob, struct spdk_io_channel *channel,
 			void *payload, uint64_t offset, uint64_t length,
 			spdk_blob_op_complete cb_fn, void *cb_arg)
 {
-	printf("blob io write %lu\n", length);
+	// printf("blob io write %lu\n", length);
 	blob_request_submit_op(blob, channel, payload, offset, length, cb_fn, cb_arg,
 			       SPDK_BLOB_WRITE);
 }
