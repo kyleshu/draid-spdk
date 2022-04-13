@@ -160,6 +160,7 @@ bs_sequence_read_dev(spdk_bs_sequence_t *seq, void *payload,
 	set->u.sequence.cb_arg = cb_arg;
 
 	channel->dev->read(channel->dev, channel->dev_channel, payload, lba, lba_count, &set->cb_args);
+	SPDK_NOTICELOG("finish read log\n");
 }
 
 void
@@ -181,6 +182,7 @@ bs_sequence_write_dev(spdk_bs_sequence_t *seq, void *payload,
 
 	channel->dev->write(channel->dev, channel->dev_channel, payload, lba, lba_count,
 			    &set->cb_args);
+	SPDK_NOTICELOG("finish write log\n");
 }
 
 void
