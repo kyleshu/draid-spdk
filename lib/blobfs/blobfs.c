@@ -342,6 +342,7 @@ __file_get_blob_size(struct spdk_file *file)
 }
 
 struct spdk_fs_request {
+	char timestamp[64];
 	struct spdk_fs_cb_args		args;
 	TAILQ_ENTRY(spdk_fs_request)	link;
 	struct spdk_fs_channel		*channel;
@@ -2246,6 +2247,7 @@ static void
 __file_flush_done(void *ctx, int bserrno)
 {
 	struct spdk_fs_request *req = ctx;
+	SPDK_NOTICELOG("cb of file flush start at %s\n", req->timestamp);
 	struct spdk_fs_cb_args *args = &req->args;
 	struct spdk_file *file = args->file;
 	struct cache_buffer *next = args->op.flush.cache_buffer;
@@ -2338,12 +2340,13 @@ __file_flush(void *ctx)
 	args->op.flush.cache_buffer = next;
 
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
-	// printf("length %lu, io unit size %u\n", length, lba_size);
+	printf("length %lu, io unit size %u\n", length, lba_size);
 
 	next->in_progress = true;
 	BLOBFS_TRACE(file, "offset=0x%jx length=0x%jx page start=0x%jx num=0x%jx\n",
 		     offset, length, start_lba, num_lba);
 	pthread_spin_unlock(&file->lock);
+	get_timestamp_prefix(req->timestamp, sizeof(req->timestamp));
 	spdk_blob_io_write(file->blob, file->fs->sync_target.sync_fs_channel->bs_channel,
 			   next->buf + (start_lba * lba_size) - next->offset,
 			   start_lba, num_lba, __file_flush_done, req);
