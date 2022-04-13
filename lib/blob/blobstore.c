@@ -1591,6 +1591,7 @@ blob_load(spdk_bs_sequence_t *seq, struct spdk_blob *blob,
 }
 
 struct spdk_blob_persist_ctx {
+	char timestamp[64];
 	struct spdk_blob		*blob;
 
 	struct spdk_bs_super_block	*super;
@@ -1869,8 +1870,8 @@ blob_persist_zero_pages_cpl(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 static void
 blob_persist_zero_pages(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 {
-	SPDK_NOTICELOG("cb of write root\n");
 	struct spdk_blob_persist_ctx	*ctx = cb_arg;
+	SPDK_NOTICELOG("cb of write root start at %s\n", ctx->timestamp);
 	struct spdk_blob		*blob = ctx->blob;
 	struct spdk_blob_store		*bs = blob->bs;
 	uint64_t			lba;
@@ -1939,6 +1940,7 @@ blob_persist_write_page_root(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 	lba = bs_md_page_to_lba(bs, bs_blobid_to_page(blob->id));
 
 	SPDK_NOTICELOG("log here\n");
+	get_timestamp_prefix(ctx->timestamp, sizeof(ctx->timestamp));
 	bs_sequence_write_dev(seq, page, lba, lba_count,
 			      blob_persist_zero_pages, ctx);
 }
