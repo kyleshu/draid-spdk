@@ -384,12 +384,13 @@ struct spdk_blob_md_page {
 	uint32_t	reserved0;
 
 	/* Descriptors here */
-	uint8_t		descriptors[65512];
+	// uint8_t		descriptors[65512];
+	uint8_t		descriptors[8168];
 
 	uint32_t	next;
 	uint32_t	crc;
 };
-#define SPDK_BS_PAGE_SIZE 0x10000
+#define SPDK_BS_PAGE_SIZE 0x2000
 SPDK_STATIC_ASSERT(SPDK_BS_PAGE_SIZE == sizeof(struct spdk_blob_md_page), "Invalid md page size");
 
 #define SPDK_BS_MAX_DESC_SIZE SPDK_SIZEOF_MEMBER(struct spdk_blob_md_page, descriptors)
@@ -427,10 +428,11 @@ struct spdk_bs_super_block {
 	uint64_t        size; /* size of blobstore in bytes */
 	uint32_t        io_unit_size; /* Size of io unit in bytes */
 
-	uint8_t         reserved[65440];
+	// uint8_t         reserved[65440];
+	uint8_t      reserved[8096];
 	uint32_t	crc;
 };
-SPDK_STATIC_ASSERT(sizeof(struct spdk_bs_super_block) == 0x10000, "Invalid super block size");
+SPDK_STATIC_ASSERT(sizeof(struct spdk_bs_super_block) == 0x2000, "Invalid super block size");
 
 #pragma pack(pop)
 
