@@ -1937,6 +1937,7 @@ blob_persist_write_page_root(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 	/* The first page in the metadata goes where the blobid indicates */
 	lba = bs_md_page_to_lba(bs, bs_blobid_to_page(blob->id));
 
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, page, lba, lba_count,
 			      blob_persist_zero_pages, ctx);
 }
@@ -2174,6 +2175,7 @@ blob_persist_write_extent_pages(spdk_bs_sequence_t *seq, void *cb_arg, int bserr
 
 		ctx->extent_page->crc = blob_md_page_calc_crc(ctx->extent_page);
 
+		SPDK_NOTICELOG("log here\n");
 		bs_sequence_write_dev(seq, ctx->extent_page, bs_md_page_to_lba(blob->bs, extent_page_id),
 				      bs_byte_to_lba(blob->bs, SPDK_BS_PAGE_SIZE),
 				      blob_persist_write_extent_pages, ctx);
@@ -2260,7 +2262,6 @@ blob_persist_dirty(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 static void
 blob_persist_check_dirty(struct spdk_blob_persist_ctx *ctx)
 {
-	// SPDK_NOTICELOG("log here\n");
 	if (ctx->blob->bs->clean) {
 		ctx->super = spdk_zmalloc(sizeof(*ctx->super), 0x1000, NULL,
 					  SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
@@ -2282,7 +2283,6 @@ static void
 blob_persist(spdk_bs_sequence_t *seq, struct spdk_blob *blob,
 	     spdk_bs_sequence_cpl cb_fn, void *cb_arg)
 {
-	// SPDK_NOTICELOG("log here\n");
 	struct spdk_blob_persist_ctx *ctx;
 
 	blob_verify_md_op(blob);
@@ -2400,6 +2400,7 @@ blob_write_copy(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 	}
 
 	/* Write whole cluster */
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, ctx->buf,
 			      bs_cluster_to_lba(ctx->blob->bs, ctx->new_cluster),
 			      bs_cluster_to_lba(ctx->blob->bs, 1),
@@ -3429,6 +3430,7 @@ bs_write_super(spdk_bs_sequence_t *seq, struct spdk_blob_store *bs,
 	super->super_blob = bs->super_blob;
 	memcpy(&super->bstype, &bs->bstype, sizeof(bs->bstype));
 	super->crc = blob_md_page_calc_crc(super);
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, super, bs_page_to_lba(bs, 0),
 			      bs_byte_to_lba(bs, sizeof(*super)),
 			      cb_fn, cb_arg);
@@ -3465,6 +3467,7 @@ bs_write_used_clusters(spdk_bs_sequence_t *seq, void *arg, spdk_bs_sequence_cpl 
 	}
 	lba = bs_page_to_lba(ctx->bs, ctx->super->used_cluster_mask_start);
 	lba_count = bs_page_to_lba(ctx->bs, ctx->super->used_cluster_mask_len);
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, ctx->mask, lba, lba_count, cb_fn, arg);
 }
 
@@ -3489,6 +3492,7 @@ bs_write_used_md(spdk_bs_sequence_t *seq, void *arg, spdk_bs_sequence_cpl cb_fn)
 	spdk_bit_array_store_mask(ctx->bs->used_md_pages, ctx->mask->mask);
 	lba = bs_page_to_lba(ctx->bs, ctx->super->used_page_mask_start);
 	lba_count = bs_page_to_lba(ctx->bs, ctx->super->used_page_mask_len);
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, ctx->mask, lba, lba_count, cb_fn, arg);
 }
 
@@ -3522,6 +3526,7 @@ bs_write_used_blobids(spdk_bs_sequence_t *seq, void *arg, spdk_bs_sequence_cpl c
 	spdk_bit_array_store_mask(ctx->bs->used_blobids, ctx->mask->mask);
 	lba = bs_page_to_lba(ctx->bs, ctx->super->used_blobid_mask_start);
 	lba_count = bs_page_to_lba(ctx->bs, ctx->super->used_blobid_mask_len);
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, ctx->mask, lba, lba_count, cb_fn, arg);
 }
 
@@ -4769,6 +4774,7 @@ bs_init_trim_cpl(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 	struct spdk_bs_load_ctx *ctx = cb_arg;
 
 	/* Write super block */
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, ctx->super, bs_page_to_lba(ctx->bs, 0),
 			      bs_byte_to_lba(ctx->bs, sizeof(*ctx->super)),
 			      bs_init_persist_super_cpl, ctx);
@@ -5536,7 +5542,6 @@ bs_create_blob(struct spdk_blob_store *bs,
 void spdk_bs_create_blob(struct spdk_blob_store *bs,
 			 spdk_blob_op_with_id_complete cb_fn, void *cb_arg)
 {
-	// SPDK_NOTICELOG("log here\n");
 	bs_create_blob(bs, NULL, NULL, cb_fn, cb_arg);
 }
 
@@ -7188,6 +7193,7 @@ blob_write_extent_page(struct spdk_blob *blob, uint32_t extent, uint64_t cluster
 
 	assert(spdk_bit_array_get(blob->bs->used_md_pages, extent) == true);
 
+	SPDK_NOTICELOG("log here\n");
 	bs_sequence_write_dev(seq, page, bs_md_page_to_lba(blob->bs, extent),
 			      bs_byte_to_lba(blob->bs, SPDK_BS_PAGE_SIZE),
 			      blob_persist_extent_page_cpl, page);
@@ -7344,7 +7350,6 @@ void spdk_blob_io_write(struct spdk_blob *blob, struct spdk_io_channel *channel,
 			void *payload, uint64_t offset, uint64_t length,
 			spdk_blob_op_complete cb_fn, void *cb_arg)
 {
-	// printf("blob io write %lu\n", length);
 	blob_request_submit_op(blob, channel, payload, offset, length, cb_fn, cb_arg,
 			       SPDK_BLOB_WRITE);
 }
