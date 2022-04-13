@@ -149,7 +149,7 @@ bs_sequence_read_dev(spdk_bs_sequence_t *seq, void *payload,
 {
 	static int read_cnt = 0;
 	read_cnt++;
-	printf("bs seq lba_count %lu, lba %u, read cnt %d\n", lba_count, lba, read_cnt);
+	SPDK_NOTICELOG("bs seq lba_count %lu, lba %u, read cnt %d\n", lba_count, lba, read_cnt);
 	struct spdk_bs_request_set      *set = (struct spdk_bs_request_set *)seq;
 	struct spdk_bs_channel       *channel = set->channel;
 
@@ -169,7 +169,7 @@ bs_sequence_write_dev(spdk_bs_sequence_t *seq, void *payload,
 {
 	static int write_cnt = 0;
 	write_cnt++;
-	printf("bs seq lba_count %lu, lba %u, write cnt %d\n", lba_count, lba, write_cnt);
+	SPDK_NOTICELOG("bs seq lba_count %lu, lba %u, write cnt %d\n", lba_count, lba, write_cnt);
 	struct spdk_bs_request_set      *set = (struct spdk_bs_request_set *)seq;
 	struct spdk_bs_channel       *channel = set->channel;
 
