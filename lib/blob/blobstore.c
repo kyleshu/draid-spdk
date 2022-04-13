@@ -1869,6 +1869,7 @@ blob_persist_zero_pages_cpl(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 static void
 blob_persist_zero_pages(spdk_bs_sequence_t *seq, void *cb_arg, int bserrno)
 {
+	SPDK_NOTICELOG("cb of write root\n");
 	struct spdk_blob_persist_ctx	*ctx = cb_arg;
 	struct spdk_blob		*blob = ctx->blob;
 	struct spdk_blob_store		*bs = blob->bs;
