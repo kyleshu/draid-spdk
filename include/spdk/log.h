@@ -183,6 +183,8 @@ enum spdk_log_level spdk_log_get_print_level(void);
 void spdk_log(enum spdk_log_level level, const char *file, const int line, const char *func,
 	      const char *format, ...) __attribute__((__format__(__printf__, 5, 6)));
 
+void get_timestamp_prefix(char *buf, int buf_size);
+
 /**
  * Same as spdk_log except that instead of being called with variable number of
  * arguments it is called with an argument list as defined in stdarg.h

@@ -75,7 +75,7 @@ spdk_log_enable_timestamps(bool value)
 	g_log_timestamps = value;
 }
 
-static void
+void
 get_timestamp_prefix(char *buf, int buf_size)
 {
 	struct tm *info;
