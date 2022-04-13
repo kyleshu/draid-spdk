@@ -342,10 +342,10 @@ __file_get_blob_size(struct spdk_file *file)
 }
 
 struct spdk_fs_request {
-	char timestamp[64];
 	struct spdk_fs_cb_args		args;
 	TAILQ_ENTRY(spdk_fs_request)	link;
 	struct spdk_fs_channel		*channel;
+	char timestamp[64];
 };
 
 struct spdk_fs_channel {
