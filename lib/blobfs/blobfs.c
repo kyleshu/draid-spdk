@@ -2247,7 +2247,9 @@ static void
 __file_flush_done(void *ctx, int bserrno)
 {
 	struct spdk_fs_request *req = ctx;
-	SPDK_NOTICELOG("cb of file flush start at %s\n", req->timestamp);
+	if(req->timestamp!=NULL) {
+		SPDK_NOTICELOG("cb of file flush start at %s\n", req->timestamp);
+	}
 	struct spdk_fs_cb_args *args = &req->args;
 	struct spdk_file *file = args->file;
 	struct cache_buffer *next = args->op.flush.cache_buffer;
