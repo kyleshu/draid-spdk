@@ -52,7 +52,7 @@
 #define BLOBFS_TRACE_RW(file, str, args...) \
 	SPDK_DEBUGLOG(blobfs_rw, "file=%s " str, file->name, ##args)
 
-#define BLOBFS_DEFAULT_CACHE_SIZE (4ULL * 1024 * 1024 * 1024)
+#define BLOBFS_DEFAULT_CACHE_SIZE (16ULL * 1024 * 1024 * 1024)
 #define SPDK_BLOBFS_DEFAULT_OPTS_CLUSTER_SZ (1024 * 1024)
 
 #define SPDK_BLOBFS_SIGNATURE	"BLOBFS"

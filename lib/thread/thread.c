@@ -274,7 +274,7 @@ _thread_lib_init(size_t ctx_sz)
 
 	snprintf(mempool_name, sizeof(mempool_name), "msgpool_%d", getpid());
 	g_spdk_msg_mempool = spdk_mempool_create(mempool_name,
-			     262144 - 1, /* Power of 2 minus 1 is optimal for memory consumption */
+			     1048576 - 1, /* Power of 2 minus 1 is optimal for memory consumption */
 			     sizeof(struct spdk_msg),
 			     0, /* No cache. We do our own. */
 			     SPDK_ENV_SOCKET_ID_ANY);
