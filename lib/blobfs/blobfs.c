@@ -345,7 +345,7 @@ struct spdk_fs_request {
 	struct spdk_fs_cb_args		args;
 	TAILQ_ENTRY(spdk_fs_request)	link;
 	struct spdk_fs_channel		*channel;
-	char timestamp[64];
+	// char timestamp[64];
 };
 
 struct spdk_fs_channel {
@@ -1893,7 +1893,7 @@ __readwrite(struct spdk_file *file, struct spdk_io_channel *channel,
 	    spdk_file_op_complete cb_fn, void *cb_arg, int is_read)
 {
 	struct iovec iov;
-	SPDK_NOTICELOG("readwrite %lu\n", length);
+	// SPDK_NOTICELOG("readwrite %lu\n", length);
 
 	iov.iov_base = payload;
 	iov.iov_len = (size_t)length;
@@ -2247,9 +2247,9 @@ static void
 __file_flush_done(void *ctx, int bserrno)
 {
 	struct spdk_fs_request *req = ctx;
-	if(req->timestamp!=NULL) {
-		SPDK_NOTICELOG("cb of file flush start at %s\n", req->timestamp);
-	}
+	// if(req->timestamp!=NULL) {
+	// 	SPDK_NOTICELOG("cb of file flush start at %s\n", req->timestamp);
+	// }
 	struct spdk_fs_cb_args *args = &req->args;
 	struct spdk_file *file = args->file;
 	struct cache_buffer *next = args->op.flush.cache_buffer;
@@ -2342,13 +2342,13 @@ __file_flush(void *ctx)
 	args->op.flush.cache_buffer = next;
 
 	__get_page_parameters(file, offset, length, &start_lba, &lba_size, &num_lba);
-	printf("length %lu, io unit size %u\n", length, lba_size);
+	// printf("length %lu, io unit size %u\n", length, lba_size);
 
 	next->in_progress = true;
 	BLOBFS_TRACE(file, "offset=0x%jx length=0x%jx page start=0x%jx num=0x%jx\n",
 		     offset, length, start_lba, num_lba);
 	pthread_spin_unlock(&file->lock);
-	get_timestamp_prefix(req->timestamp, sizeof(req->timestamp));
+	// get_timestamp_prefix(req->timestamp, sizeof(req->timestamp));
 	spdk_blob_io_write(file->blob, file->fs->sync_target.sync_fs_channel->bs_channel,
 			   next->buf + (start_lba * lba_size) - next->offset,
 			   start_lba, num_lba, __file_flush_done, req);
@@ -2703,7 +2703,7 @@ spdk_file_read(struct spdk_file *file, struct spdk_fs_thread_ctx *ctx,
 		buf = tree_find_filled_buffer(file->tree, offset);
 		if (buf == NULL) {
 			pthread_spin_unlock(&file->lock);
-			SPDK_NOTICELOG("read from file %lu", length);
+			// SPDK_NOTICELOG("read from file %lu", length);
 			ret = __send_rw_from_file(file, payload, offset, length, true, &arg);
 			pthread_spin_lock(&file->lock);
 			if (ret == 0) {

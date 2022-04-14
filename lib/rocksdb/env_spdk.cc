@@ -195,7 +195,7 @@ SpdkSequentialFile::Read(size_t n, Slice *result, char *scratch)
 	int64_t ret;
 
 	set_channel();
-	SPDK_NOTICELOG("spdk seq read %d\n", n);
+	// SPDK_NOTICELOG("spdk seq read %d\n", n);
 	ret = spdk_file_read(mFile, g_sync_args.channel, scratch, mOffset, n);
 	if (ret >= 0) {
 		mOffset += ret;
@@ -244,7 +244,7 @@ SpdkRandomAccessFile::Read(uint64_t offset, size_t n, Slice *result, char *scrat
 	int64_t rc;
 
 	set_channel();
-	SPDK_NOTICELOG("spdk rand read %d\n", n);
+	// SPDK_NOTICELOG("spdk rand read %d\n", n);
 	rc = spdk_file_read(mFile, g_sync_args.channel, scratch, offset, n);
 	if (rc >= 0) {
 		*result = Slice(scratch, n);
@@ -398,7 +398,7 @@ SpdkWritableFile::Append(const Slice &data)
 	int64_t rc;
 
 	set_channel();
-	SPDK_NOTICELOG("spdk write to file %d\n", data.size());
+	// SPDK_NOTICELOG("spdk write to file %d\n", data.size());
 	rc = spdk_file_write(mFile, g_sync_args.channel, (void *)data.data(), mSize, data.size());
 	if (rc >= 0) {
 		mSize += data.size();
@@ -478,7 +478,7 @@ public:
 			int rc;
 
 			set_channel();
-			printf("new random file\n");
+			// printf("new random file\n");
 			rc = spdk_fs_open_file(g_fs, g_sync_args.channel,
 					       name.c_str(), 0, &file);
 			if (rc == 0) {
