@@ -986,6 +986,7 @@ hello_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 }
 
 static void kvstore_start(void* arg) {
+	SPDK_NOTICELOG("kvstore start\n");
     struct hello_context_t *hello_context = (hello_context_t*) arg;
     uint32_t blk_size, buf_align;
     int rc = 0;
