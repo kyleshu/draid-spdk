@@ -839,6 +839,10 @@ Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 	}
 }
 
+}
+
+namespace ycsbc{
+
 class KVStore {
 public:
 
@@ -1109,4 +1113,4 @@ KVStore::KVStore(const std::string &conf, const std::string &bdev_name) {
     }
 }
 
-} // namespace rocksdb
+}
