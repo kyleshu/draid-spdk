@@ -1126,6 +1126,16 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 }
 
 KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
+
+	std::ifstream addrs(g_addr_file, std::ios::in);
+  	std::string ip_addr;
+	addrs>>ip_addr;
+	addrs.close();
+
+    g_host_ip_addr = ip_addr;
+	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
+    g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
+	
 	return new spdk_KVStore(conf, bdev_name);
 }
 
