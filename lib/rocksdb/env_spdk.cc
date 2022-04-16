@@ -1086,7 +1086,7 @@ void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
 }
 
 
-spdk_KVStore::spdk_KVStore(const std::string &conf, const std::string &bdev_name): KVStore(conf, bdev_name) {
+spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_name): KVStore(_conf, _bdev_name) {
     g_hello_context = new hello_context_t();
     g_context_mempool = new moodycamel::ReaderWriterQueue<hello_context_t*>(kCtxPoolSize);
     int rc;
@@ -1097,10 +1097,10 @@ spdk_KVStore::spdk_KVStore(const std::string &conf, const std::string &bdev_name
 
     spdk_app_opts_init(opts, sizeof(*opts));
     opts->name = "kvstore";
-    opts->json_config_file = conf.c_str();
+    opts->json_config_file = _conf.c_str();
     opts->reactor_mask = "0x3000";
 
-    g_hello_context->bdev_name = bdev_name.c_str();
+    g_hello_context->bdev_name = _bdev_name.c_str();
 
     rc = spdk_app_start(opts, kvstore_start, g_hello_context);
 
