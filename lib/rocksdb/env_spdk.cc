@@ -895,6 +895,8 @@ static void read_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_a
 {
     struct hello_context_t *hello_context = (struct hello_context_t*) cb_arg;
 
+	spdk_bdev_free_io(bdev_io);
+
     if (success) {
         //SPDK_NOTICELOG("Read string from bdev\n");
     } else {
@@ -939,7 +941,7 @@ static void write_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_
     spdk_bdev_free_io(bdev_io);
 
     if (success) {
-        //SPDK_NOTICELOG("bdev io write completed successfully\n");
+        SPDK_NOTICELOG("bdev io write completed successfully\n");
     } else {
         SPDK_ERRLOG("bdev io write error: %d\n", EIO);
         spdk_put_io_channel(hello_context->bdev_io_channel);
