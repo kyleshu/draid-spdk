@@ -1126,6 +1126,8 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 	pthread_create(&init_thread, NULL, &init_kvstore, opts);
 
 	while(!init) {}
+
+	SPDK_NOTICELOG("create spdk kvstore\n");
 }
 
 KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
