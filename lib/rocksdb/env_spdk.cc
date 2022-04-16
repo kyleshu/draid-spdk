@@ -896,12 +896,13 @@ static void read_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_a
     struct hello_context_t *hello_context = (struct hello_context_t*) cb_arg;
 
     if (success) {
-        SPDK_NOTICELOG("Read string from bdev\n");
+        //SPDK_NOTICELOG("Read string from bdev\n");
     } else {
         SPDK_ERRLOG("bdev io read error\n");
     }
 
     sem_post(&hello_context->sem);
+	g_context_mempool->enqueue(hello_context);
 }
 
 static void hello_read(void *arg)
@@ -909,7 +910,7 @@ static void hello_read(void *arg)
     struct hello_context_t *hello_context = (struct hello_context_t*) arg;
     int rc = 0;
 
-    SPDK_NOTICELOG("Reading io\n");
+    //SPDK_NOTICELOG("Reading io\n");
     rc = spdk_bdev_read_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
                 hello_context->buff, hello_context->offset, hello_context->length, read_complete, hello_context);
 
@@ -938,7 +939,7 @@ static void write_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_
     spdk_bdev_free_io(bdev_io);
 
     if (success) {
-        SPDK_NOTICELOG("bdev io write completed successfully\n");
+        //SPDK_NOTICELOG("bdev io write completed successfully\n");
     } else {
         SPDK_ERRLOG("bdev io write error: %d\n", EIO);
         spdk_put_io_channel(hello_context->bdev_io_channel);
@@ -952,13 +953,14 @@ static void write_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_
     memset(hello_context->buff, 0, length);
 
     sem_post(&hello_context->sem);
+	g_context_mempool->enqueue(hello_context);
 }
 
 static void hello_write(void *arg) {
     struct hello_context_t *hello_context = (struct hello_context_t*) arg;
     int rc = 0;
 
-    SPDK_NOTICELOG("Writing to the bdev\n");
+    //SPDK_NOTICELOG("Writing to the bdev\n");
     rc = spdk_bdev_write_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
                 hello_context->buff, hello_context->offset, hello_context->length, write_complete, hello_context);
 
