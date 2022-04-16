@@ -1063,9 +1063,9 @@ void spdk_KVStore::Write(void* src, uint64_t offset, uint64_t length) {
     bool found;
     do {
         found = g_context_mempool->try_dequeue(hello_context);
-        if (!found) {
-            SPDK_ERRLOG("run out of bdev_context");
-        }
+        // if (!found) {
+        //     SPDK_ERRLOG("run out of bdev_context");
+        // }
     } while (!found);
     hello_context->offset = offset;
     hello_context->length = length;
@@ -1081,9 +1081,9 @@ void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
     bool found;
     do {
         found = g_context_mempool->try_dequeue(hello_context);
-        if (!found) {
-            SPDK_ERRLOG("run out of bdev_context");
-        }
+        // if (!found) {
+        //     SPDK_ERRLOG("run out of bdev_context");
+        // }
     } while (!found);
     hello_context->offset = offset;
     hello_context->length = length;
@@ -1128,6 +1128,7 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 	// while(!init_spdk) {
 	// 	printf("initing...\n");
 	// }
+	sleep(5);
 
 	SPDK_NOTICELOG("create spdk kvstore\n");
 }
