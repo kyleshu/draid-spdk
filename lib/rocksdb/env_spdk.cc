@@ -986,7 +986,7 @@ hello_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 }
 
 static pthread_t init_thread;
-static bool init = false;
+static bool init_spdk = false;
 
 static void kvstore_start(void* arg) {
 	SPDK_NOTICELOG("kvstore start\n");
@@ -1053,7 +1053,7 @@ static void kvstore_start(void* arg) {
 
     }
 
-	init = true;
+	init_spdk = true;
 
 	SPDK_NOTICELOG("start finish\n");
 }
@@ -1123,10 +1123,11 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 
 	SPDK_NOTICELOG("before start, conf: %s\n", _conf.c_str());
 
-	// pthread_create(&init_thread, NULL, &init_kvstore, opts);
+	pthread_create(&init_thread, NULL, &init_kvstore, opts);
 
-	// while(!init) {}
-	rc = spdk_app_start(opts, kvstore_start, g_hello_context);
+	while(!init_spdk) {
+		printf("initing...\n");
+	}
 
 	SPDK_NOTICELOG("create spdk kvstore\n");
 }
