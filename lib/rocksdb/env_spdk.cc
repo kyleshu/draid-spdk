@@ -1102,6 +1102,8 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 
     g_hello_context->bdev_name = _bdev_name.c_str();
 
+	SPDK_NOTICELOG("before start, conf: %s\n", _conf.c_str());
+
     rc = spdk_app_start(opts, kvstore_start, g_hello_context);
 
     if (rc) {
