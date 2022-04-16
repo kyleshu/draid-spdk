@@ -1049,6 +1049,8 @@ static void kvstore_start(void* arg) {
         g_context_mempool->enqueue(hello_context);
 
     }
+
+	SPDK_NOTICELOG("start finish\n");
 }
 
 void spdk_KVStore::Write(void* src, uint64_t offset, uint64_t length) {
