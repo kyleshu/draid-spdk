@@ -31,6 +31,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "../../../dRaid/src/common/common.h"
+#include "../../../dRaid/src/common/readerwriterqueue.h"
 
 #include "rocksdb/env.h"
 #include <set>
@@ -768,7 +769,8 @@ SpdkEnv::SpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 	opts->name = "rocksdb";
 	opts->json_config_file = mConfig.c_str();
 	opts->shutdown_cb = rocksdb_shutdown;
-	opts->tpoint_group_mask = "0x80";
+	opts->tpoint_group_mask = "0x1000";
+	opts->reactor_mask = "0x6000";
 
 	spdk_fs_set_cache_size(cache_size_in_mb);
 	g_bdev_name = mBdev;
@@ -835,6 +837,276 @@ Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 		SPDK_ERRLOG("NewSpdkEnv: default exception caught");
 		return NULL;
 	}
+}
+
+class KVStore {
+public:
+
+    void Write(void* src, uint64_t offset, uint64_t length);
+
+    void Read(void* dst, uint64_t offset, uint64_t length);
+
+    KVStore(const std::string &conf, const std::string &bdev_name);
+};
+
+
+struct hello_context_t {
+	struct spdk_bdev *bdev;
+	struct spdk_bdev_desc *bdev_desc;
+	struct spdk_io_channel *bdev_io_channel;
+	char *buff;
+	const char *bdev_name;
+	struct spdk_bdev_io_wait_entry bdev_io_wait;
+	size_t buff_len;
+    size_t blk_size;
+    size_t buf_align;
+	uint64_t offset;
+	uint64_t length;
+    sem_t sem;
+};
+
+static constexpr size_t kCtxPoolSize = 512;
+static constexpr size_t span_length = 1024;
+static hello_context_t* g_hello_context = nullptr;
+static struct spdk_thread *g_spdk_thread = nullptr;
+static moodycamel::ReaderWriterQueue<hello_context_t*>* g_context_mempool = nullptr;
+
+hello_context_t* alloc_context() {
+    hello_context_t* tmp = (hello_context_t*) malloc(sizeof(hello_context_t));
+    tmp->bdev = g_hello_context->bdev;
+    tmp->bdev_desc = g_hello_context->bdev_desc;
+    tmp->bdev_io_channel = g_hello_context->bdev_io_channel;
+    tmp->bdev_name = g_hello_context->bdev_name;
+    tmp->buff_len = g_hello_context->buff_len;
+    tmp->blk_size = g_hello_context->blk_size;
+    tmp->buf_align = g_hello_context->buf_align;
+    tmp->buff = (char*) spdk_dma_zmalloc(g_hello_context->buff_len, g_hello_context->buf_align, NULL);
+    if (!tmp->buff) {
+        free(tmp);
+        return nullptr;
+    }
+    sem_init(&tmp->sem, 0, 0);
+    return tmp;
+}
+
+
+static void read_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+    struct hello_context_t *hello_context = (struct hello_context_t*) cb_arg;
+
+    if (success) {
+        SPDK_NOTICELOG("Read string from bdev\n");
+    } else {
+        SPDK_ERRLOG("bdev io read error\n");
+    }
+
+    sem_post(&hello_context->sem);
+}
+
+static void hello_read(void *arg)
+{
+    struct hello_context_t *hello_context = (struct hello_context_t*) arg;
+    int rc = 0;
+
+    SPDK_NOTICELOG("Reading io\n");
+    rc = spdk_bdev_read_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
+                hello_context->buff, hello_context->offset, hello_context->length, read_complete, hello_context);
+
+    if (rc == -ENOMEM) {
+        SPDK_NOTICELOG("Queueing io\n");
+        /* In case we cannot perform I/O now, queue I/O */
+        hello_context->bdev_io_wait.bdev = hello_context->bdev;
+        hello_context->bdev_io_wait.cb_fn = hello_read;
+        hello_context->bdev_io_wait.cb_arg = hello_context;
+        spdk_bdev_queue_io_wait(hello_context->bdev, hello_context->bdev_io_channel,
+                    &hello_context->bdev_io_wait);
+    } else if (rc) {
+        SPDK_ERRLOG("%s error while reading from bdev: %d\n", spdk_strerror(-rc), rc);
+        spdk_put_io_channel(hello_context->bdev_io_channel);
+        spdk_bdev_close(hello_context->bdev_desc);
+        spdk_app_stop(-1);
+    }
+}
+
+static void write_complete(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+    struct hello_context_t *hello_context = (struct hello_context_t*) cb_arg;
+    uint32_t length;
+
+    /* Complete the I/O */
+    spdk_bdev_free_io(bdev_io);
+
+    if (success) {
+        SPDK_NOTICELOG("bdev io write completed successfully\n");
+    } else {
+        SPDK_ERRLOG("bdev io write error: %d\n", EIO);
+        spdk_put_io_channel(hello_context->bdev_io_channel);
+        spdk_bdev_close(hello_context->bdev_desc);
+        spdk_app_stop(-1);
+        return;
+    }
+
+    /* Zero the buffer so that we can use it for reading */
+    length = spdk_bdev_get_block_size(hello_context->bdev);
+    memset(hello_context->buff, 0, length);
+
+    sem_post(&hello_context->sem);
+}
+
+static void hello_write(void *arg) {
+    struct hello_context_t *hello_context = (struct hello_context_t*) arg;
+    int rc = 0;
+
+    SPDK_NOTICELOG("Writing to the bdev\n");
+    rc = spdk_bdev_write_blocks(hello_context->bdev_desc, hello_context->bdev_io_channel,
+                hello_context->buff, hello_context->offset, hello_context->length, write_complete, hello_context);
+
+    if (rc == -ENOMEM) {
+        SPDK_NOTICELOG("Queueing io\n");
+        /* In case we cannot perform I/O now, queue I/O */
+        hello_context->bdev_io_wait.bdev = hello_context->bdev;
+        hello_context->bdev_io_wait.cb_fn = hello_write;
+        hello_context->bdev_io_wait.cb_arg = hello_context;
+        spdk_bdev_queue_io_wait(hello_context->bdev, hello_context->bdev_io_channel,
+                    &hello_context->bdev_io_wait);
+    } else if (rc) {
+        SPDK_ERRLOG("%s error while writing to bdev: %d\n", spdk_strerror(-rc), rc);
+        spdk_put_io_channel(hello_context->bdev_io_channel);
+        spdk_bdev_close(hello_context->bdev_desc);
+        spdk_app_stop(-1);
+    }
+}
+
+static void
+hello_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
+		    void *event_ctx)
+{
+	SPDK_NOTICELOG("Unsupported bdev event: type %d\n", type);
+}
+
+static void kvstore_start(void* arg) {
+    struct hello_context_t *hello_context = (hello_context_t*) arg;
+    uint32_t blk_size, buf_align;
+    int rc = 0;
+    hello_context->bdev = NULL;
+    hello_context->bdev_desc = NULL;
+
+    g_spdk_thread = spdk_get_thread();
+
+    SPDK_NOTICELOG("Successfully started the application\n");
+
+    /*
+    * There can be many bdevs configured, but this application will only use
+    * the one input by the user at runtime.
+    *
+    * Open the bdev by calling spdk_bdev_open_ext() with its name.
+    * The function will return a descriptor
+    */
+    SPDK_NOTICELOG("Opening the bdev %s\n", hello_context->bdev_name);
+    rc = spdk_bdev_open_ext(hello_context->bdev_name, true, hello_bdev_event_cb, NULL,
+                &hello_context->bdev_desc);
+    if (rc) {
+        SPDK_ERRLOG("Could not open bdev: %s\n", hello_context->bdev_name);
+        spdk_app_stop(-1);
+        return;
+    }
+
+    /* A bdev pointer is valid while the bdev is opened. */
+    hello_context->bdev = spdk_bdev_desc_get_bdev(hello_context->bdev_desc);
+
+
+    SPDK_NOTICELOG("Opening io channel\n");
+    /* Open I/O channel */
+    hello_context->bdev_io_channel = spdk_bdev_get_io_channel(hello_context->bdev_desc);
+    if (hello_context->bdev_io_channel == NULL) {
+        SPDK_ERRLOG("Could not create bdev I/O channel!!\n");
+        spdk_bdev_close(hello_context->bdev_desc);
+        spdk_app_stop(-1);
+        return;
+    }
+
+    /* Allocate memory for the write buffer.
+    * Initialize the write buffer with the string "Hello World!"
+    */
+    blk_size = spdk_bdev_get_block_size(hello_context->bdev);
+    buf_align = spdk_bdev_get_buf_align(hello_context->bdev);
+    hello_context->buff_len = blk_size * span_length;
+    hello_context->blk_size = blk_size;
+    hello_context->buf_align = buf_align;
+    hello_context->buff = (char*) spdk_dma_zmalloc(hello_context->buff_len, buf_align, NULL);
+    if (!hello_context->buff) {
+        SPDK_ERRLOG("Failed to allocate buffer\n");
+        spdk_put_io_channel(hello_context->bdev_io_channel);
+        spdk_bdev_close(hello_context->bdev_desc);
+        spdk_app_stop(-1);
+        return;
+    }
+
+    for(int i = 0; i < kCtxPoolSize; ++i) {
+        hello_context_t* hello_context = alloc_context();
+        g_context_mempool->enqueue(hello_context);
+
+    }
+}
+
+void KVStore::Write(void* src, uint64_t offset, uint64_t length) {
+    hello_context_t* hello_context;
+    bool found;
+    do {
+        found = g_context_mempool->try_dequeue(hello_context);
+        if (!found) {
+            SPDK_ERRLOG("run out of bdev_context");
+        }
+    } while (!found);
+    hello_context->offset = offset;
+    hello_context->length = length;
+    memcpy(hello_context->buff, src, length * hello_context->blk_size);
+
+    spdk_thread_send_msg(g_spdk_thread, hello_write, hello_context);
+    sem_wait(&hello_context->sem);
+}
+
+
+void KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
+    hello_context_t* hello_context;
+    bool found;
+    do {
+        found = g_context_mempool->try_dequeue(hello_context);
+        if (!found) {
+            SPDK_ERRLOG("run out of bdev_context");
+        }
+    } while (!found);
+    hello_context->offset = offset;
+    hello_context->length = length;
+
+    spdk_thread_send_msg(g_spdk_thread, hello_read, hello_context);
+    sem_wait(&hello_context->sem);
+    memcpy(dst, hello_context->buff, length * hello_context->blk_size);
+}
+
+
+KVStore::KVStore(const std::string &conf, const std::string &bdev_name) {
+    g_hello_context = new hello_context_t();
+    g_context_mempool = new moodycamel::ReaderWriterQueue<hello_context_t*>(kCtxPoolSize);
+    int rc;
+
+    struct spdk_app_opts *opts = new struct spdk_app_opts;
+
+    sem_init(&g_hello_context->sem, 0, 0);
+
+    spdk_app_opts_init(opts, sizeof(*opts));
+    opts->name = "kvstore";
+    opts->json_config_file = conf.c_str();
+    opts->reactor_mask = "0x3000";
+
+    g_hello_context->bdev_name = bdev_name.c_str();
+
+    rc = spdk_app_start(opts, kvstore_start, g_hello_context);
+
+    if (rc) {
+        delete opts;
+        SPDK_ERRLOG("cannot start kvstore\n");
+    }
 }
 
 } // namespace rocksdb
