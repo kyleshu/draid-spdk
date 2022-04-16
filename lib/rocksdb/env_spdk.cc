@@ -1085,6 +1085,21 @@ void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
     memcpy(dst, hello_context->buff, length * hello_context->blk_size);
 }
 
+static pthread_t init_thread;
+static bool init = false;
+
+static void * init_kvstore(void* arg) {
+	struct spdk_app_opts *opts = (struct spdk_app_opts *)arg;
+
+    rc = spdk_app_start(opts, kvstore_start, g_hello_context);
+
+    if (rc) {
+        delete opts;
+        SPDK_ERRLOG("cannot start kvstore\n");
+    }
+	init = true;
+	return nullptr;
+}
 
 spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_name): KVStore(_conf, _bdev_name) {
     g_hello_context = new hello_context_t();
@@ -1104,12 +1119,9 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 
 	SPDK_NOTICELOG("before start, conf: %s\n", _conf.c_str());
 
-    rc = spdk_app_start(opts, kvstore_start, g_hello_context);
+	pthread_create(&init_thread, NULL, &init_kvstore, opts);
 
-    if (rc) {
-        delete opts;
-        SPDK_ERRLOG("cannot start kvstore\n");
-    }
+	while(!init) {}
 }
 
 KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
