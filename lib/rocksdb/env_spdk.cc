@@ -985,6 +985,9 @@ hello_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	SPDK_NOTICELOG("Unsupported bdev event: type %d\n", type);
 }
 
+static pthread_t init_thread;
+static bool init = false;
+
 static void kvstore_start(void* arg) {
 	SPDK_NOTICELOG("kvstore start\n");
     struct hello_context_t *hello_context = (hello_context_t*) arg;
@@ -1050,6 +1053,8 @@ static void kvstore_start(void* arg) {
 
     }
 
+	init = true;
+
 	SPDK_NOTICELOG("start finish\n");
 }
 
@@ -1088,9 +1093,6 @@ void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
     memcpy(dst, hello_context->buff, length * hello_context->blk_size);
 }
 
-static pthread_t init_thread;
-static bool init = false;
-
 static void * init_kvstore(void* arg) {
 	struct spdk_app_opts *opts = (struct spdk_app_opts *)arg;
 
@@ -1100,7 +1102,6 @@ static void * init_kvstore(void* arg) {
         delete opts;
         SPDK_ERRLOG("cannot start kvstore\n");
     }
-	init = true;
 	return nullptr;
 }
 
