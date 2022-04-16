@@ -1091,7 +1091,7 @@ static bool init = false;
 static void * init_kvstore(void* arg) {
 	struct spdk_app_opts *opts = (struct spdk_app_opts *)arg;
 
-    rc = spdk_app_start(opts, kvstore_start, g_hello_context);
+    int rc = spdk_app_start(opts, kvstore_start, g_hello_context);
 
     if (rc) {
         delete opts;
