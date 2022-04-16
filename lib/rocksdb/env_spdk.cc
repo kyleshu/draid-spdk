@@ -1086,7 +1086,7 @@ void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
 }
 
 
-spdk_KVStore::spdk_KVStore(const std::string &conf, const std::string &bdev_name) {
+spdk_KVStore::spdk_KVStore(const std::string &conf, const std::string &bdev_name): KVStore(conf, bdev_name) {
     g_hello_context = new hello_context_t();
     g_context_mempool = new moodycamel::ReaderWriterQueue<hello_context_t*>(kCtxPoolSize);
     int rc;
