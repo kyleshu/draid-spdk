@@ -1128,7 +1128,7 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 	// while(!init_spdk) {
 	// 	printf("initing...\n");
 	// }
-	sleep(5);
+	sleep(20);
 
 	SPDK_NOTICELOG("create spdk kvstore\n");
 }
