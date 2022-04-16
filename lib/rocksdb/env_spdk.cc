@@ -847,7 +847,7 @@ public:
 
     void Read(void* dst, uint64_t offset, uint64_t length);
 
-    KVStore(const std::string &conf, const std::string &bdev_name);
+    spdk_KVStore(const std::string &conf, const std::string &bdev_name);
 };
 
 
