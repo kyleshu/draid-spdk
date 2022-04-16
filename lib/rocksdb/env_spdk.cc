@@ -839,11 +839,8 @@ Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 	}
 }
 
-}
 
-namespace ycsbc{
-
-class KVStore {
+class spdk_KVStore: public KVStore {
 public:
 
     void Write(void* src, uint64_t offset, uint64_t length);
@@ -1053,7 +1050,7 @@ static void kvstore_start(void* arg) {
     }
 }
 
-void KVStore::Write(void* src, uint64_t offset, uint64_t length) {
+void spdk_KVStore::Write(void* src, uint64_t offset, uint64_t length) {
     hello_context_t* hello_context;
     bool found;
     do {
@@ -1071,7 +1068,7 @@ void KVStore::Write(void* src, uint64_t offset, uint64_t length) {
 }
 
 
-void KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
+void spdk_KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
     hello_context_t* hello_context;
     bool found;
     do {
@@ -1089,7 +1086,7 @@ void KVStore::Read(void* dst, uint64_t offset, uint64_t length) {
 }
 
 
-KVStore::KVStore(const std::string &conf, const std::string &bdev_name) {
+spdk_KVStore::KVStore(const std::string &conf, const std::string &bdev_name) {
     g_hello_context = new hello_context_t();
     g_context_mempool = new moodycamel::ReaderWriterQueue<hello_context_t*>(kCtxPoolSize);
     int rc;
@@ -1111,6 +1108,10 @@ KVStore::KVStore(const std::string &conf, const std::string &bdev_name) {
         delete opts;
         SPDK_ERRLOG("cannot start kvstore\n");
     }
+}
+
+KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
+	return new spdk_KVStore(conf, bdev_name);
 }
 
 }
