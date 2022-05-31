@@ -821,7 +821,7 @@ Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 
     g_host_ip_addr = ip_addr;
 	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
-    g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
+    g_nexus = new erpc::Nexus(client_uri, 0, 0);
 	try {
 		SpdkEnv *spdk_env = new SpdkEnv(base_env, dir, conf, bdev, cache_size_in_mb);
 		if (g_fs != NULL) {
@@ -1146,7 +1146,7 @@ KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
 
     g_host_ip_addr = ip_addr;
 	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
-    g_nexus = new erpc::Nexus(client_uri, 0, numOfThreads);
+    g_nexus = new erpc::Nexus(client_uri, 0, 0);
 	
 	return new spdk_KVStore(conf, bdev_name);
 }
