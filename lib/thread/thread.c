@@ -1058,6 +1058,17 @@ spdk_thread_has_active_pollers(struct spdk_thread *thread)
 	return !TAILQ_EMPTY(&thread->active_pollers);
 }
 
+int
+spdk_thread_num_active_pollers(struct spdk_thread *thread)
+{
+    struct spdk_poller *poller;
+    int count = 0;
+    TAILQ_FOREACH(poller, &thread->active_pollers, tailq) {
+        count++;
+    }
+    return count;
+}
+
 static bool
 thread_has_unpaused_pollers(struct spdk_thread *thread)
 {

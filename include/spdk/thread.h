@@ -384,6 +384,8 @@ uint64_t spdk_thread_next_poller_expiration(struct spdk_thread *thread);
  */
 int spdk_thread_has_active_pollers(struct spdk_thread *thread);
 
+int spdk_thread_num_active_pollers(struct spdk_thread *thread);
+
 /**
  * Returns whether there are any pollers registered to be run
  * on the thread.
