@@ -30,7 +30,6 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../../../dRaid/src/common/common.h"
 #include "../../../dRaid/src/common/readerwriterqueue.h"
 
 #include "rocksdb/env.h"
@@ -47,29 +46,6 @@ extern "C" {
 #include "spdk/log.h"
 #include "spdk/thread.h"
 #include "spdk/bdev.h"
-}
-
-static erpc::Nexus *g_nexus;
-static char *g_addr_file = "/users/kyleshu/artifacts/ip_addrs_100g.txt";
-static uint8_t g_phy_port = 2;
-static std::string g_host_ip_addr;
-
-erpc::Nexus *
-erpc_get_nexus(void)
-{
-    return g_nexus;
-}
-
-uint8_t
-erpc_get_phy_port(void)
-{
-    return g_phy_port;
-}
-
-std::string
-get_host_ip_addr(void)
-{
-    return g_host_ip_addr;
 }
 
 namespace rocksdb
@@ -814,14 +790,6 @@ SpdkEnv::~SpdkEnv()
 Env *NewSpdkEnv(Env *base_env, const std::string &dir, const std::string &conf,
 		const std::string &bdev, uint64_t cache_size_in_mb)
 {
-    std::ifstream addrs(g_addr_file, std::ios::in);
-  	std::string ip_addr;
-	addrs>>ip_addr;
-	addrs.close();
-
-    g_host_ip_addr = ip_addr;
-	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
-    g_nexus = new erpc::Nexus(client_uri, 0, 0);
 	try {
 		SpdkEnv *spdk_env = new SpdkEnv(base_env, dir, conf, bdev, cache_size_in_mb);
 		if (g_fs != NULL) {
@@ -925,7 +893,6 @@ static void hello_read(void *arg)
         spdk_bdev_queue_io_wait(hello_context->bdev, hello_context->bdev_io_channel,
                     &hello_context->bdev_io_wait);
     } else if (rc) {
-        SPDK_ERRLOG("%s error while reading from bdev: %d\n", spdk_strerror(-rc), rc);
         spdk_put_io_channel(hello_context->bdev_io_channel);
         spdk_bdev_close(hello_context->bdev_desc);
         spdk_app_stop(-1);
@@ -975,7 +942,6 @@ static void hello_write(void *arg) {
         spdk_bdev_queue_io_wait(hello_context->bdev, hello_context->bdev_io_channel,
                     &hello_context->bdev_io_wait);
     } else if (rc) {
-        SPDK_ERRLOG("%s error while writing to bdev: %d\n", spdk_strerror(-rc), rc);
         spdk_put_io_channel(hello_context->bdev_io_channel);
         spdk_bdev_close(hello_context->bdev_desc);
         spdk_app_stop(-1);
@@ -1139,15 +1105,6 @@ spdk_KVStore::spdk_KVStore(const std::string &_conf, const std::string &_bdev_na
 
 KVStore* NewSpdkKVStore(const std::string &conf, const std::string &bdev_name) {
 
-	std::ifstream addrs(g_addr_file, std::ios::in);
-  	std::string ip_addr;
-	addrs>>ip_addr;
-	addrs.close();
-
-    g_host_ip_addr = ip_addr;
-	std::string client_uri = ip_addr + ":" + std::to_string(kUDPPort);
-    g_nexus = new erpc::Nexus(client_uri, 0, 0);
-	
 	return new spdk_KVStore(conf, bdev_name);
 }
 
