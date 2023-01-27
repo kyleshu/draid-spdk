@@ -93,7 +93,7 @@ else
 	yum install -y python
 fi
 yum install -y python3-pip
-pip3 install ninja
+pip3 install ninja==1.10.2
 pip3 install meson
 pip3 install pyelftools
 pip3 install ijson
